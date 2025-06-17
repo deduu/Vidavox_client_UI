@@ -1,0 +1,476 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Global styles */
+body {
+  background-color: #fff; /* or #f8f9fa */
+  color: #212529;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+
+.main-header {
+    color: #343a40;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 0.5rem;
+}
+
+.section-header {
+    color: #495057;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Sidebar styles */
+.sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background-color: #343a40 !important;
+}
+
+.sidebar .nav-link {
+    color: #adb5bd;
+    border-radius: 0.25rem;
+    margin-bottom: 0.2rem;
+}
+
+.sidebar .nav-link:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-link.active {
+    color: white;
+    background-color: #007bff;
+}
+
+.nav-section {
+    margin-bottom: 1.5rem;
+}
+
+/* Document preview styles */
+.document-preview {
+    font-family: monospace;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+/* Results styling */
+.highlight-card {
+    background-color: #f8f9fa;
+    border-left: 3px solid #007bff;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.25rem;
+}
+
+.consistent {
+    color: #28a745;
+    padding: 0.75rem;
+    background-color: rgba(40, 167, 69, 0.1);
+    border-radius: 0.25rem;
+    margin: 1rem 0;
+}
+
+.inconsistency-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.inconsistency-card h4 {
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Form styles */
+.correction-form {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    margin-top: 1rem;
+}
+
+/* Table styles */
+.table-container {
+    margin: 1.5rem 0;
+}
+
+/* Toast notification styles */
+.toast {
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Loading spinner */
+.spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+}
+/* highlight any selected tree element */
+/* static/css/styles.css — add at the bottom */
+
+/* neutral style for any folder / file button */
+.tree-item{
+    background-color: transparent;  /* wipe out buttonface grey  */
+    border: 0;
+    padding: .25rem .5rem;
+    width: 100%;
+    text-align: left;
+  }
+
+  /* highlight the one that is active OR being hovered */
+.tree-item.active{
+    background-color: rgba(13,110,253,.15);  /* blue tint */
+    border-radius: .25rem;
+    cursor: pointer;
+}
+
+
+/* extra cue for files */
+.file-item.active{
+  font-weight: 600;
+}
+
+/* static/css/styles.css */
+#file-tree{
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+
+  #selected-files-list .list-group-item {
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+  }
+  
+  #selected-files-list .list-group-item:hover {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+  }
+  
+  #selected-files-list .remove-file {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+  }
+  
+  #selected-files-list .remove-file:hover {
+    opacity: 1;
+  }
+
+  .sidebar {
+    /* position: sticky;
+    top: 0;
+    height: 100vh;
+    width: 250px;          
+    padding: 1.5rem 1rem;    */
+  }
+  @media (max-width: 992px) {
+    .sidebar {
+      /* height: auto;        
+      position: relative;
+      width: 100%; */
+    }
+  }
+
+  /* Stronger form styling */
+  form .form-label {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+  }
+  form .form-control,
+  form .form-select {
+    border-width: 2px;
+  }
+  form .form-control:focus,
+  form .form-select:focus {
+    box-shadow: 0 0 0 0.2rem rgba(13,110,253,.25);
+  }
+  
+/* Auth modal custom styles */
+.auth-modal .modal-content {
+  border-radius: 15px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: none;
+}
+
+.auth-modal .modal-header {
+  background: linear-gradient(135deg, #4c8bf5, #2d5cb4);
+  border-bottom: none;
+  padding: 20px;
+}
+
+.auth-modal .modal-title {
+  color: white;
+  font-weight: 600;
+  font-size: 1.5rem;
+  margin: 0 auto;
+}
+
+.auth-modal .nav-tabs {
+  border: none;
+  margin-top: -20px;
+  justify-content: center;
+  position: relative;
+  z-index: 3;
+}
+
+.auth-modal .nav-link {
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  padding: 15px 25px;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.auth-modal .nav-link.active {
+  background: transparent;
+  color: white;
+}
+
+.auth-modal .nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 25%;
+  width: 50%;
+  height: 3px;
+  background-color: white;
+  border-radius: 2px;
+  animation: slideIn 0.3s forwards;
+}
+
+@keyframes slideIn {
+  from { width: 0; left: 50%; }
+  to { width: 50%; left: 25%; }
+}
+
+.auth-modal .modal-body {
+  padding: 30px;
+}
+
+.auth-modal .form-label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.auth-modal .form-control {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #dce4ec;
+  transition: all 0.3s;
+}
+
+.auth-modal .form-control:focus {
+  border-color: #4c8bf5;
+  box-shadow: 0 0 0 0.25rem rgba(76, 139, 245, 0.15);
+}
+
+.auth-modal .input-group-text {
+  background-color: #f8f9fa;
+  border: 1px solid #dce4ec;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+}
+
+.auth-modal .input-group .form-control {
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+}
+
+.auth-modal .btn-primary {
+  background: linear-gradient(135deg, #4c8bf5, #2d5cb4);
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.auth-modal .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(76, 139, 245, 0.3);
+}
+
+.auth-modal .btn-success {
+  background: linear-gradient(135deg, #2dce89, #1fa067);
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.auth-modal .btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(45, 206, 137, 0.3);
+}
+
+.auth-logo {
+  max-width: 70px;
+  margin-bottom: 15px;
+}
+
+.auth-modal .form-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  color: #6c757d;
+}
+
+.auth-modal .form-divider::before,
+.auth-modal .form-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e9ecef;
+}
+
+.auth-modal .form-divider span {
+  padding: 0 10px;
+}
+
+.auth-modal .social-login {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.auth-modal .social-login button {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e9ecef;
+  background: white;
+  color: #6c757d;
+  transition: all 0.3s;
+}
+
+.auth-modal .social-login button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.05);
+}
+
+.auth-modal .social-login .facebook {
+  color: #3b5998;
+}
+
+.auth-modal .social-login .google {
+  color: #db4437;
+}
+
+.auth-modal .social-login .linkedin {
+  color: #0e76a8;
+}
+
+.auth-modal .form-help {
+  text-align: center;
+  font-size: 0.9rem;
+  margin-top: 20px;
+  color: #6c757d;
+}
+
+.auth-modal .form-help a {
+  color: #4c8bf5;
+  text-decoration: none;
+}
+
+.auth-modal .form-help a:hover {
+  text-decoration: underline;
+}
+
+.auth-modal .password-toggle {
+  cursor: pointer;
+  color: #6c757d;
+}
+
+.form-floating {
+  margin-bottom: 20px;
+}
+
+.form-floating label {
+  padding-left: 12px;
+}
+
+.form-floating .form-control {
+  height: 58px;
+}
+
+.icon-badge {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #4c8bf5, #2d5cb4);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  color: white;
+  font-size: 1.5rem;
+}
+
+
+#user-info {
+  padding: 0 15px;
+}
+
+#user-info .user-profile {
+  background-color: #3a3b45;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+#user-info .user-avatar {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#user-info .text-light {
+  color: #b7b9cc !important;
+}
+
+#btn-logout {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  transition: all 0.2s;
+}
+
+#btn-logout:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+
