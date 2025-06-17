@@ -4,6 +4,8 @@ import { AuthContext } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import CheckEmailPage from './pages/CheckEmailPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 
 export function PrivateRoute({ children }) {
   const { user, loading } = useContext(AuthContext);
@@ -26,7 +28,10 @@ export default function App() {
             <DashboardPage />
           </PrivateRoute>
         }
+        
       />
+      <Route path="/check-email" element={<CheckEmailPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
     </Routes>
   );
 }

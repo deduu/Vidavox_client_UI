@@ -1,7 +1,11 @@
 // src/contexts/AuthContext.jsx
-import React, { createContext, useState, useEffect } from 'react';
-import { login as apiLogin, register as apiRegister, fetchCurrentUser } from '../services/api';
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useState, useEffect } from "react";
+import {
+  login as apiLogin,
+  register as apiRegister,
+  fetchCurrentUser,
+} from "../services/api";
+import { useNavigate } from "react-router-dom";
 
 export const AuthContext = createContext();
 
@@ -12,13 +16,13 @@ export function AuthProvider({ children }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token) {
       fetchCurrentUser()
-        .then(u => setUser(u))
+        .then((u) => setUser(u))
         .catch(() => {
           // if token invalid/expired, drop it
-          localStorage.removeItem('token');
+          localStorage.removeItem("token");
         })
         .finally(() => {
           setLoading(false);
@@ -29,23 +33,23 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = async creds => {
+  const login = async (creds) => {
     const { access_token } = await apiLogin(creds);
-    localStorage.setItem('token', access_token);
+    localStorage.setItem("token", access_token);
     const me = await fetchCurrentUser();
     setUser(me);
-    navigate('/dashboard');
+    navigate("/dashboard");
   };
 
-  const register = async data => {
+  const register = async (data) => {
     await apiRegister(data);
-    await login({ username: data.username, password: data.password });
+    navigate(`/check-email?email=${encodeURIComponent(data.email)}`);
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem("token");
     setUser(null);
-    navigate('/');
+    navigate("/");
   };
 
   return (
