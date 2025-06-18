@@ -181,3 +181,17 @@ export async function uploadFiles(files, folderId) {
   }
   return res.json();
 }
+
+export async function sendChat({ question, folder_ids, file_ids }) {
+  const res = await fetch(`${API_URL}/chat/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify({ question, folder_ids, file_ids }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Chat failed");
+  return data; // { answer: string }
+}
