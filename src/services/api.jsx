@@ -175,11 +175,15 @@ export async function uploadFiles(files, folderId) {
     body: form,
   });
 
-  if (!res.ok) {
+  if (!res.ok && res.status !== 207) {
     const err = await res.json().catch(() => null);
     throw new Error(err?.detail || `Upload failed: ${res.status}`);
   }
-  return res.json();
+  const payload = await res.json();
+  if (payload.failed_files?.length) {
+    alert(`${payload.failed_files.length} files failed`);
+  }
+  return payload;
 }
 
 export async function sendChat({ question, folder_ids, file_ids }) {
