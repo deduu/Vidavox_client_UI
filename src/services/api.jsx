@@ -159,32 +159,78 @@ export async function deleteFile(id) {
 }
 
 // services/api.js
-
 export async function uploadFiles(files, folderId) {
   const form = new FormData();
-
-  // files could be FileList or array
-  Array.from(files).forEach((file) => {
-    // 'files' must match your FastAPI param name
-    form.append("files", file);
-  });
+  Array.from(files).forEach((file) => form.append("files", file));
 
   const res = await fetch(`${API_URL}/folders/${folderId}/upload`, {
     method: "POST",
-    headers: authHeader(), // do NOT set Content-Type
+    headers: authHeader(),
     body: form,
   });
 
+  // hard failures (4xx/5xx except 207)
   if (!res.ok && res.status !== 207) {
     const err = await res.json().catch(() => null);
     throw new Error(err?.detail || `Upload failed: ${res.status}`);
   }
+
   const payload = await res.json();
+
   if (payload.failed_files?.length) {
-    alert(`${payload.failed_files.length} files failed`);
+    // --- Handle either shape -----------------------------------------
+    const failedList = payload.failed_files
+      .map((item) => {
+        // tuple? → item[0] is path; object? → item.name
+        const fileName =
+          typeof item === "string"
+            ? item.split(/[\\/]/).pop()
+            : Array.isArray(item)
+            ? item[0].split(/[\\/]/).pop()
+            : item.name;
+
+        // optional: include the reason in parentheses
+        const reason = Array.isArray(item)
+          ? item[1]
+          : typeof item === "object"
+          ? item.reason
+          : "";
+
+        return `• ${fileName}${reason ? " – " + reason : ""}`;
+      })
+      .join("\n");
+
+    alert(`Some files failed:\n${failedList}`);
   }
+
   return payload;
 }
+
+// export async function uploadFiles(files, folderId) {
+//   const form = new FormData();
+
+//   // files could be FileList or array
+//   Array.from(files).forEach((file) => {
+//     // 'files' must match your FastAPI param name
+//     form.append("files", file);
+//   });
+
+//   const res = await fetch(`${API_URL}/folders/${folderId}/upload`, {
+//     method: "POST",
+//     headers: authHeader(), // do NOT set Content-Type
+//     body: form,
+//   });
+//   logger.info(`upload response: ${res.json()}`);
+//   if (!res.ok && res.status !== 207) {
+//     const err = await res.json().catch(() => null);
+//     throw new Error(err?.detail || `Upload failed: ${res.status}`);
+//   }
+//   const payload = await res.json();
+//   if (payload.failed_files?.length) {
+//     alert(`${payload.failed_files.length} files failed`);
+//   }
+//   return payload;
+// }
 
 export async function sendChat({ question, folder_ids, file_ids }) {
   const res = await fetch(`${API_URL}/chat/`, {
