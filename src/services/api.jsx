@@ -206,31 +206,85 @@ export async function uploadFiles(files, folderId) {
   return payload;
 }
 
-// export async function uploadFiles(files, folderId) {
-//   const form = new FormData();
+export async function listKnowledgeBases() {
+  const res = await fetch(`${API_URL}/knowledge_bases`, {
+    headers: {
+      ...authHeader(),
+    },
+  });
+  const data = await res.json();
+  if (!res.ok)
+    throw new Error(data.detail || "Failed to fetch knowledge bases");
+  return data;
+}
 
-//   // files could be FileList or array
-//   Array.from(files).forEach((file) => {
-//     // 'files' must match your FastAPI param name
-//     form.append("files", file);
-//   });
+export async function createKnowledgeBase(name, fileIds) {
+  const form = new FormData();
+  form.append("name", name);
+  fileIds.forEach((id) => form.append("file_ids", id));
+  const res = await fetch(`${API_URL}/knowledge_bases`, {
+    method: "POST",
+    headers: {
+      ...authHeader(),
+    },
+    body: form,
+  });
+  const data = await res.json();
+  if (!res.ok)
+    throw new Error(data.detail || "Failed to create knowledge base");
+  return data;
+}
 
-//   const res = await fetch(`${API_URL}/folders/${folderId}/upload`, {
-//     method: "POST",
-//     headers: authHeader(), // do NOT set Content-Type
-//     body: form,
-//   });
-//   logger.info(`upload response: ${res.json()}`);
-//   if (!res.ok && res.status !== 207) {
-//     const err = await res.json().catch(() => null);
-//     throw new Error(err?.detail || `Upload failed: ${res.status}`);
-//   }
-//   const payload = await res.json();
-//   if (payload.failed_files?.length) {
-//     alert(`${payload.failed_files.length} files failed`);
-//   }
-//   return payload;
-// }
+export async function updateKnowledgeBase(kbId, data) {
+  const res = await fetch(`${API_URL}/knowledge_bases/${kbId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify(data),
+  });
+  const response = await res.json();
+  if (!res.ok)
+    throw new Error(response.detail || "Failed to update knowledge base");
+  return response;
+}
+
+export async function deleteKnowledgeBase(kbId) {
+  const res = await fetch(`${API_URL}/knowledge_bases/${kbId}`, {
+    method: "DELETE",
+    headers: authHeader(),
+  });
+  const data = await res.json();
+  if (!res.ok)
+    throw new Error(data.detail || "Failed to delete knowledge base");
+  return data;
+}
+
+export async function sendChatMessage({ message, knowledgeBaseFileIds }) {
+  const form = new FormData();
+  form.append("query", message);
+  form.append("prompt_type", "agentic");
+  form.append("search_mode", "hybrid");
+  form.append("top_k", 10);
+  form.append("threshold", 0.4);
+  form.append("prefixes", knowledgeBaseFileIds);
+
+  const res = await fetch(`${API_URL}/analysis/perform_rag`, {
+    method: "POST",
+    headers: {
+      ...authHeader(), // Authorization only; FormData sets its own Content-Type
+    },
+    body: form,
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || "RAG analysis failed");
+  }
+
+  return data; // Should be: { answer: string, ... }
+}
 
 export async function sendChat({ question, folder_ids, file_ids }) {
   const res = await fetch(`${API_URL}/chat/`, {

@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import CheckEmailPage from "./pages/CheckEmailPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import ChatPage from "./pages/ChatPage";
+import KnowledgeBaseManagerPage from "./pages/KnowledgeBaseManagerPage";
 
 export function PrivateRoute({ children }) {
   const { user, loading } = useContext(AuthContext);
@@ -40,6 +41,7 @@ export default function App() {
           </PrivateRoute>
         }
       />
+      <Route path="/knowledge-bases" element={<KnowledgeBaseManagerPage />} />
     </Routes>
   );
 }
