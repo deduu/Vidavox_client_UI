@@ -26,7 +26,7 @@ export default function KnowledgeBaseManagerPage() {
             Knowledge Base Manager
           </h1>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="text-sm text-blue-600 hover:underline"
           >
             ← Back to Dashboard

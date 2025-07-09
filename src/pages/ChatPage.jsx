@@ -1,240 +1,285 @@
-import { useEffect, useState, useRef } from "react";
-import { sendChatMessage, listKnowledgeBases } from "../services/api";
+// pages/ChatPage.jsx
+import React, { useEffect, useState, useRef } from "react";
 import SidebarLayout from "../components/SidebarLayout";
-
-import ChatList from "../components/ChatList";
 import ChatMessage from "../components/ChatMessage";
 import ChatInput from "../components/ChatInput";
-
-import { v4 as uuidv4 } from "uuid";
+import MultiModelChatPanel from "../components/MultiModelChatPanel";
+import { useChatSession } from "../contexts/ChatSessionContext";
+import {
+  sendChatMessage,
+  listKnowledgeBases,
+  chatDirect,
+  chatDirectStream,
+} from "../services/api";
 
 export default function ChatPage() {
+  // UI state
+  const [chatMode, setChatMode] = useState("normal");
   const [message, setMessage] = useState("");
-  const [chats, setChats] = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(null);
   const [sending, setSending] = useState(false);
-  const [selectedKbId, setSelectedKbId] = useState(null);
-  const [knowledgeBases, setKnowledgeBases] = useState([]);
-  const [editingMsg, setEditingMsg] = useState(null);
 
-  const scrollRef = useRef(null);
+  // KB state
+  const [kbs, setKbs] = useState([]);
+  const [selectedKb, setSelectedKb] = useState("");
 
-  // current chat & history
-  const currentChat = chats.find((c) => c.id === currentChatId);
-  const history = currentChat?.messages || [];
+  // LLM options
+  const [model, setModel] = useState("openai");
+  const [streaming, setStreaming] = useState(true);
+  const [maxTokens, setMaxTokens] = useState(1024);
+  const [temperature, setTemperature] = useState(0.8);
 
-  // load from localStorage + KBs
+  // Chat session context
+  const {
+    chats,
+    currentChatId,
+    setCurrentChatId,
+    createNewChat,
+    sendMessageToCurrentChat,
+    loadMessagesForCurrentChat,
+    messagesMap,
+  } = useChatSession();
+
+  const [history, setHistory] = useState([]);
+
+  // --- sanity‐check your chats/history so history.map never crashes ---
+  console.log("🏷️ chats:", chats);
+  console.log("🏷️ currentChatId:", currentChatId);
+  const activeChat = chats.find((c) => c.id === currentChatId);
+  console.log("🏷️ activeChat:", activeChat);
+
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem("chatSessions") || "[]");
-    if (stored.length) {
-      setChats(stored);
-      setCurrentChatId(stored[0].id);
-    } else {
-      createNewChat();
-    }
+    if (!currentChatId) return;
+    (async () => {
+      const msgs = await loadMessagesForCurrentChat();
+      setHistory(msgs);
+    })();
+  }, [currentChatId, messagesMap]);
+  console.log("🏷️ history:", history);
 
+  const scrollRef = useRef();
+
+  // Load KBs once
+  useEffect(() => {
+    console.log("🔄 Fetching KB list...");
     listKnowledgeBases()
-      .then(setKnowledgeBases)
-      .catch((e) => console.error("Failed to load KBs", e));
+      .then((list) => {
+        // console.log("✅ KBs loaded:", list);
+        setKbs(list);
+      })
+      .catch((err) => {
+        // console.error("❌ Failed to load KBs:", err);
+      });
   }, []);
 
-  // persist chats
-  useEffect(() => {
-    localStorage.setItem("chatSessions", JSON.stringify(chats));
-  }, [chats]);
-
-  // auto-scroll
+  // Auto‐scroll when history changes
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history]);
+  }, [history.length]);
 
-  // crud for chats
-  const createNewChat = () => {
-    const id = uuidv4();
-    setChats((prev) => [{ id, title: "New Chat", messages: [] }, ...prev]);
-    setCurrentChatId(id);
-  };
-  const updateCurrentChat = (messages) => {
-    setChats((prev) =>
-      prev.map((c) =>
-        c.id === currentChatId
-          ? {
-              ...c,
-              messages,
-              title:
-                c.title === "New Chat" && messages.length
-                  ? messages[0].content.slice(0, 40) +
-                    (messages[0].content.length > 40 ? "…" : "")
-                  : c.title,
-            }
-          : c
-      )
-    );
-  };
-  const deleteChat = (id) => {
-    const filtered = chats.filter((c) => c.id !== id);
-    setChats(filtered);
-    if (id === currentChatId) {
-      filtered.length ? setCurrentChatId(filtered[0].id) : createNewChat();
-    }
-  };
-  const renameChat = (id, newTitle) => {
-    setChats((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, title: newTitle } : c))
-    );
+  const sendChatMessageToBackend = async (msg) => {
+    const { role, content, citations = null, chunks = null } = msg;
+    await sendMessageToCurrentChat({ role, content, citations, chunks });
   };
 
-  // message actions
-  const handleCopy = (msg) => {
-    navigator.clipboard.writeText(msg.content);
-  };
-  const handleEdit = (msg) => {
-    setMessage(msg.content);
-    setEditingMsg(msg);
-  };
-  const handleDownload = (msg) => {
-    const blob = new Blob([msg.content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "message.txt";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // stubs for file/image upload
-  const handleAttachFile = (file) => {
-    console.log("Attach file:", file);
-    // TODO: upload & then push a message to chat
-  };
-  const handlePasteImage = (file) => {
-    console.log("Pasted image:", file);
-    // TODO: upload & then push a message to chat
-  };
-
-  // send or edit
   const handleSend = async () => {
-    if (!message.trim() || !currentChatId) return;
-
-    // editing existing
-    if (editingMsg) {
-      const newHist = history.map((m) =>
-        m === editingMsg ? { ...m, content: message } : m
-      );
-      updateCurrentChat(newHist);
-      setEditingMsg(null);
-      setMessage("");
+    if (!message.trim()) {
+      console.log("🛑 Empty message, ignoring send.");
       return;
     }
 
-    // new user message
+    // console.log("▶️ Sending message:", message);
     const userMsg = { role: "user", content: message };
-    const updated = [...history, userMsg];
-    updateCurrentChat(updated);
+    const baseHistory = [...history, userMsg];
+    // console.log("📚 New history:", baseHistory);
 
-    setSending(true);
+    // Optimistic UI update
+    setHistory(baseHistory);
     setMessage("");
+    setSending(true);
 
     try {
-      const kb = knowledgeBases.find(
-        (k) => String(k.id) === String(selectedKbId)
-      );
-      const fileIds = kb ? kb.files.map((f) => f.id) : [];
+      const kb = kbs.find((k) => String(k.id) === selectedKb);
+      if (kb) {
+        // ── ROUTE A: KB‐based RAG call ──
+        console.log("🔍 Using KB:", kb.name);
+        const fileIds = kb.files.map((f) => f.id);
+        const res = await sendChatMessage({
+          message,
+          knowledgeBaseFileIds: fileIds,
+        });
+        console.log("✅ RAG response:", res);
+        const assistantMsg = {
+          role: "assistant",
+          content: res.response.answer,
+        };
+        await sendChatMessageToBackend(userMsg); // <-- send to backend
+        await sendChatMessageToBackend(assistantMsg); // <-- send to backend
+        setHistory((prev) => [...prev, assistantMsg]);
+      } else {
+        await sendChatMessageToBackend(userMsg);
+        // ── ROUTE B: Direct LLM chat ──
+        console.log(`💬 Direct chat (model=${model}, stream=${streaming})`);
 
-      const res = await sendChatMessage({
-        message,
-        knowledgeBaseFileIds: fileIds,
-      });
+        if (streaming) {
+          console.log("⏳ Streaming branch…");
+          const assistantMsg = { role: "assistant", content: "" };
+          setHistory((prev) => [...prev, assistantMsg]);
 
-      const assistantMsg = {
-        role: "assistant",
-        content: res.response.answer,
-        citations: res.response.citations || [],
-        chunks: res.response.used_chunks || [],
-      };
-      updateCurrentChat([...updated, assistantMsg]);
+          for await (const token of chatDirectStream({
+            model,
+            messages: baseHistory,
+            max_tokens: maxTokens,
+            temperature,
+          })) {
+            assistantMsg.content += token;
+            setHistory((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = { ...assistantMsg }; // trigger re-render
+              return copy;
+            });
+            setTimeout(() => {
+              scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, 10);
+          }
+
+          console.log("✅ Streaming complete.");
+          await sendChatMessageToBackend(assistantMsg);
+        } else {
+          console.log("⏳ Non‐stream branch…");
+          const reply = await chatDirect({
+            model,
+            messages: baseHistory,
+            max_tokens: maxTokens,
+            temperature,
+          });
+          console.log("📬 Full reply:", reply);
+          const assistantMsg = { role: "assistant", content: reply };
+          await sendChatMessageToBackend(assistantMsg);
+          setHistory((prev) => [...prev, assistantMsg]);
+        }
+      }
     } catch (err) {
-      const errMsg = err.message?.includes("Insufficient credits")
-        ? "🚨 Not enough credits."
-        : "⚠️ Error occurred.";
-      updateCurrentChat([...updated, { role: "assistant", content: errMsg }]);
+      console.error("❌ handleSend error:", err);
+      setHistory((prev) => [
+        ...prev,
+        { role: "assistant", content: "⚠️ Something went wrong." },
+      ]);
     } finally {
+      console.log("⏹️ handleSend done");
       setSending(false);
     }
   };
 
   return (
-    <SidebarLayout>
-      <div className="flex h-[calc(100vh-2rem)] bg-gray-50 rounded-lg shadow overflow-hidden">
-        <ChatList
-          chats={chats}
-          currentId={currentChatId}
-          onSelect={setCurrentChatId}
-          onDelete={deleteChat}
-          onRename={renameChat}
-        />
+    <SidebarLayout bottomSlot="Powered by Vidavox">
+      <div className="flex flex-col flex-1 h-full bg-white">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-b bg-gray-50">
+          <h2 className="text-xl font-bold">Agentic Chat</h2>
 
-        <div className="flex-1 flex flex-col">
-          {/* header */}
-          <div className="border-b p-4 flex justify-between items-center">
-            <h1 className="font-bold text-xl">💬 Agentic Chat</h1>
-            <button
-              onClick={createNewChat}
-              className="text-sm bg-blue-600 text-white px-3 py-1 rounded shadow hover:bg-blue-700"
-            >
-              ➕ New Chat
-            </button>
-          </div>
-
-          {/* KB selector */}
-          <div className="p-4 bg-white border-b">
-            <label className="block text-sm font-medium mb-1">
-              Knowledge Base:
-            </label>
+          <div className="flex items-center gap-2">
+            {/* Model */}
             <select
-              className="border px-3 py-2 rounded w-full"
-              value={selectedKbId || ""}
-              onChange={(e) => setSelectedKbId(e.target.value || null)}
+              className="border rounded px-3 py-2"
+              value={model}
+              onChange={(e) => {
+                console.log("🔄 Model →", e.target.value);
+                setModel(e.target.value);
+              }}
             >
-              <option value="">🔓 No grounding (free-form)</option>
-              {knowledgeBases.map((kb) => (
+              <option value="openai">OpenAI</option>
+            </select>
+
+            {/* Stream Toggle */}
+            {/* <label className="flex items-center space-x-1">
+              <input
+                type="checkbox"
+                checked={streaming}
+                onChange={(e) => {
+                  console.log("🔄 Stream →", e.target.checked);
+                  setStreaming(e.target.checked);
+                }}
+                className="form-checkbox"
+              />
+              <span className="text-sm">Stream</span>
+            </label> */}
+
+            {/* Chat Mode */}
+            <select
+              className="border rounded px-3 py-2"
+              value={chatMode}
+              onChange={(e) => {
+                console.log("🔄 ChatMode →", e.target.value);
+                setChatMode(e.target.value);
+              }}
+            >
+              <option value="normal">🧠 Normal</option>
+              <option value="multi">🤖 Multi-Model</option>
+            </select>
+
+            {/* KB */}
+            <select
+              className="border rounded px-3 py-2"
+              value={selectedKb}
+              onChange={(e) => {
+                console.log("🔄 KB →", e.target.value);
+                setSelectedKb(e.target.value);
+              }}
+            >
+              <option value="">🔓 No KB</option>
+              {kbs.map((kb) => (
                 <option key={kb.id} value={kb.id}>
-                  📚 {kb.name} ({kb.file_count} files)
+                  {kb.name} ({kb.file_count})
                 </option>
               ))}
             </select>
           </div>
+        </div>
 
-          {/* message list */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {history.map((msg, i) => (
+        {/* Chat Area */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {chatMode === "multi" ? (
+            <MultiModelChatPanel history={history} />
+          ) : history.length ? (
+            history.map((msg, i) => (
               <ChatMessage
                 key={i}
                 msg={msg}
-                onCopy={handleCopy}
-                onEdit={handleEdit}
-                onDownload={handleDownload}
+                onCopy={() => {
+                  console.log("📋 Copied:", msg.content);
+                  navigator.clipboard.writeText(msg.content);
+                }}
+                onDownload={(m) => {
+                  console.log("⬇️ Downloading:", m.content);
+                  const blob = new Blob([m.content], { type: "text/plain" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "message.txt";
+                  a.click();
+                }}
               />
-            ))}
-            {/* ✅ Add this */}
-            {sending && (
-              <ChatMessage
-                msg={{ role: "assistant", content: "Typing..." }}
-                onCopy={() => {}}
-                onEdit={() => {}}
-                onDownload={() => {}}
-              />
-            )}
-            <div ref={scrollRef} />
-          </div>
+            ))
+          ) : (
+            <div className="text-center text-gray-400 mt-8">
+              Start typing to begin the conversation…
+            </div>
+          )}
+          {sending && (
+            <div className="text-gray-400 italic flex items-center gap-2">
+              Assistant is typing
+              <span className="dot-typing" />
+            </div>
+          )}
+          <div ref={scrollRef} />
+        </div>
 
-          {/* input */}
+        {/* Input */}
+        <div className="p-4 border-t bg-gray-50">
           <ChatInput
             message={message}
             setMessage={setMessage}
-            onSend={handleSend}
-            onAttachFile={handleAttachFile}
-            onPasteImage={handlePasteImage}
+            onSend={() => handleSend(message)}
             disabled={sending}
           />
         </div>

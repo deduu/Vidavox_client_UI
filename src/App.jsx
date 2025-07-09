@@ -1,28 +1,29 @@
-import React, { useContext } from "react";
+// App.jsx
+import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthContext } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import DashboardPage from "./pages/DashboardPage";
 import CheckEmailPage from "./pages/CheckEmailPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
+import DashboardPage from "./pages/DashboardPage";
 import ChatPage from "./pages/ChatPage";
 import KnowledgeBaseManagerPage from "./pages/KnowledgeBaseManagerPage";
 
-export function PrivateRoute({ children }) {
-  const { user, loading } = useContext(AuthContext);
-
-  if (loading) {
-    // you could return a spinner here if you like
-    return null;
-  }
+function PrivateRoute({ children }) {
+  const { user, loading } = React.useContext(AuthContext);
+  if (loading) return null; // or a spinner
   return user ? children : <Navigate to="/" replace />;
 }
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/check-email" element={<CheckEmailPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+
       <Route
         path="/dashboard"
         element={
@@ -31,8 +32,14 @@ export default function App() {
           </PrivateRoute>
         }
       />
-      <Route path="/check-email" element={<CheckEmailPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route
+        path="/knowledge-bases"
+        element={
+          <PrivateRoute>
+            <KnowledgeBaseManagerPage />
+          </PrivateRoute>
+        }
+      />
       <Route
         path="/chat"
         element={
@@ -41,7 +48,6 @@ export default function App() {
           </PrivateRoute>
         }
       />
-      <Route path="/knowledge-bases" element={<KnowledgeBaseManagerPage />} />
     </Routes>
   );
 }

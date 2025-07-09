@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 
 export default function ChatInput({
   message,
@@ -9,6 +9,7 @@ export default function ChatInput({
   disabled,
 }) {
   const fileInputRef = useRef();
+  const textareaRef = useRef();
 
   const handlePaste = (e) => {
     const items = e.clipboardData?.items;
@@ -21,6 +22,15 @@ export default function ChatInput({
       }
     }
   };
+
+  // Auto-resize textarea height based on content
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto"; // reset
+      el.style.height = el.scrollHeight + "px"; // grow to fit
+    }
+  }, [message]);
 
   return (
     <div className="p-4 bg-white border-t flex items-center space-x-2">
@@ -35,7 +45,8 @@ export default function ChatInput({
       />
 
       <textarea
-        className="flex-1 border rounded p-2 resize-none"
+        ref={textareaRef}
+        className="flex-1 border rounded p-2 resize-none overflow-hidden"
         rows={1}
         placeholder="Type a message…"
         value={message}
@@ -48,6 +59,7 @@ export default function ChatInput({
         }}
         onPaste={handlePaste}
         disabled={disabled}
+        style={{ maxHeight: "160px", overflowY: "auto" }} // max ~6 lines
       />
 
       <button

@@ -179,7 +179,7 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
             {/* Enhanced File Explorer */}
-            <div className="xl:col-span-3 flex flex-col min-h-[32rem] bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-white/30">
+            <div className="xl:col-span-3 flex flex-col min-h-[32rem] bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-white/30 overflow-hidden">
               {/* Header */}
               <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center justify-between">

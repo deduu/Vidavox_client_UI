@@ -299,3 +299,151 @@ export async function sendChat({ question, folder_ids, file_ids }) {
   if (!res.ok) throw new Error(data.detail || "Chat failed");
   return data; // { answer: string }
 }
+
+// non-streaming chat
+export async function chatDirect({
+  model,
+  messages,
+  max_tokens = 512,
+  temperature = 0.8,
+}) {
+  const payload = { model, messages, max_tokens, temperature, stream: false };
+  const res = await fetch(`${API_URL}/chat/chat-direct`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "chat-direct failed");
+  // your backend wraps text in { text: answer }
+  return data.text;
+}
+
+// streaming chat (async-iterator of tokens)
+export async function* chatDirectStream({
+  model,
+  messages,
+  max_tokens = 512,
+  temperature = 0.8,
+}) {
+  const payload = { model, messages, max_tokens, temperature, stream: true };
+  const res = await fetch(`${API_URL}/chat/chat-direct`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "chat-direct stream failed");
+  }
+
+  // Read the text/event-stream
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    // SSE-style: lines beginning with "data: "
+    const parts = buf.split("\n\n");
+    buf = parts.pop(); // leftover
+    for (const chunk of parts) {
+      if (chunk.startsWith("data:")) {
+        const jsonStr = chunk.replace(/^data:\s*/, "");
+        try {
+          const { text } = JSON.parse(jsonStr);
+          yield text;
+        } catch {
+          // ignore non-JSON ping events
+        }
+      }
+    }
+  }
+}
+
+// Create chat session
+export async function createChatSession() {
+  const res = await fetch(`${API_URL}/chat/sessions`, {
+    method: "POST",
+    headers: authHeader(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to create chat session");
+  return data;
+}
+
+// List chat sessions
+export async function listChatSessions() {
+  const res = await fetch(`${API_URL}/chat/sessions`, {
+    headers: authHeader(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch sessions");
+  return data;
+}
+
+// Delete chat session
+export async function deleteChatSession(sessionId) {
+  const res = await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: authHeader(),
+  });
+  if (!res.ok && res.status !== 204)
+    throw new Error("Failed to delete session");
+}
+
+// Rename chat session
+export async function renameChatSession(sessionId, title) {
+  const res = await fetch(
+    `${API_URL}/chat/sessions/${sessionId}?title=${encodeURIComponent(title)}`,
+    {
+      method: "PUT",
+      headers: authHeader(),
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to rename session");
+  return data;
+}
+
+// Add message to chat session
+export async function addChatMessage(sessionId, messageObj) {
+  const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify(messageObj),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to send message");
+  return data;
+}
+
+// Get messages from session
+export async function getChatMessages(sessionId) {
+  const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+    headers: authHeader(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to fetch messages");
+  return data;
+}
+
+// Delete all messages from session
+export async function deleteChatMessages(sessionId) {
+  const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
+    method: "DELETE",
+    headers: authHeader(),
+  });
+  if (!res.ok && res.status !== 204)
+    throw new Error("Failed to delete messages");
+}

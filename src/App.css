@@ -1,8 +1,19 @@
+/* --- override old rules --- */
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden; /* no page-wide side-scroll ever */
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  max-width: none; /* or simply delete the old max-width line */
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  overflow: hidden; /* keep if you want to block page scrollbars */
 }
 
 .logo {
