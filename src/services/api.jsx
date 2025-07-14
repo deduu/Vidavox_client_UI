@@ -415,6 +415,11 @@ export async function renameChatSession(sessionId, title) {
 
 // Add message to chat session
 export async function addChatMessage(sessionId, messageObj) {
+  console.debug("📤 addChatMessage payload:", {
+    sessionId,
+    messageObj,
+  });
+
   const res = await fetch(`${API_URL}/chat/sessions/${sessionId}/messages`, {
     method: "POST",
     headers: {
@@ -423,9 +428,22 @@ export async function addChatMessage(sessionId, messageObj) {
     },
     body: JSON.stringify(messageObj),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Failed to send message");
-  return data;
+
+  const text = await res.text(); // ← safer than res.json() directly
+
+  try {
+    const data = JSON.parse(text);
+
+    if (!res.ok) {
+      console.error("❌ addChatMessage failed:", data);
+      throw new Error(data.detail || JSON.stringify(data));
+    }
+
+    return data;
+  } catch (e) {
+    console.error("❌ Failed to parse error response:", text);
+    throw new Error(`Non-JSON error response: ${text}`);
+  }
 }
 
 // Get messages from session
@@ -446,4 +464,14 @@ export async function deleteChatMessages(sessionId) {
   });
   if (!res.ok && res.status !== 204)
     throw new Error("Failed to delete messages");
+}
+
+// services/api.js (or wherever you keep helpers)
+export async function listLLMs() {
+  const res = await fetch(`${API_URL}/llm/list`, {
+    headers: { "Content-Type": "application/json", ...authHeader() },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Failed to load LLM list");
+  return data;
 }

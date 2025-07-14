@@ -20,6 +20,7 @@ export function ChatSessionProvider({ children }) {
   useEffect(() => {
     (async () => {
       try {
+        // console.log("📥 listChatSessions is running…");
         const sessions = await listChatSessions();
         setChats(sessions);
         if (sessions.length) {
@@ -68,11 +69,13 @@ export function ChatSessionProvider({ children }) {
 
     // If already cached, return from memory
     if (messagesMap[currentChatId]) {
-      return messagesMap[currentChatId];
+      return messagesMap[currentChatId].map(hydrateMsg);
     }
 
     try {
-      const msgs = await getChatMessages(currentChatId);
+      // const msgs = await getChatMessages(currentChatId);
+      const raw = await getChatMessages(currentChatId);
+      const msgs = raw.map(hydrateMsg);
       setMessagesMap((prev) => ({ ...prev, [currentChatId]: msgs }));
       return msgs;
     } catch (err) {
@@ -93,14 +96,20 @@ export function ChatSessionProvider({ children }) {
     const newMsg = await addChatMessage(currentChatId, {
       role,
       content,
-      citations,
-      chunks,
+      citations: citations ? JSON.stringify(citations) : null,
+      chunks: chunks ? JSON.stringify(chunks) : null,
     });
 
     // Update messages map cache
+    // setMessagesMap((prev) => ({
+    //   ...prev,
+    //   [currentChatId]: [...(prev[currentChatId] || []), newMsg],
+    // }));
+
+    const hydrated = hydrateMsg(newMsg);
     setMessagesMap((prev) => ({
       ...prev,
-      [currentChatId]: [...(prev[currentChatId] || []), newMsg],
+      [currentChatId]: [...(prev[currentChatId] || []), hydrated],
     }));
 
     // Optionally update chat title
@@ -140,4 +149,25 @@ export function ChatSessionProvider({ children }) {
 
 export function useChatSession() {
   return useContext(ChatSessionContext);
+}
+
+function hydrateMsg(msg) {
+  let { citations, chunks } = msg;
+
+  if (typeof citations === "string") {
+    try {
+      citations = JSON.parse(citations);
+    } catch {
+      citations = [];
+    }
+  }
+  if (typeof chunks === "string") {
+    try {
+      chunks = JSON.parse(chunks);
+    } catch {
+      chunks = [];
+    }
+  }
+
+  return { ...msg, citations, chunks };
 }

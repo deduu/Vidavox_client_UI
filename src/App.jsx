@@ -9,11 +9,17 @@ import VerifyEmailPage from "./pages/VerifyEmailPage";
 import DashboardPage from "./pages/DashboardPage";
 import ChatPage from "./pages/ChatPage";
 import KnowledgeBaseManagerPage from "./pages/KnowledgeBaseManagerPage";
+import { ChatSessionProvider } from "./contexts/ChatSessionContext";
 
 function PrivateRoute({ children }) {
   const { user, loading } = React.useContext(AuthContext);
   if (loading) return null; // or a spinner
-  return user ? children : <Navigate to="/" replace />;
+
+  return user ? (
+    <ChatSessionProvider>{children}</ChatSessionProvider>
+  ) : (
+    <Navigate to="/" replace />
+  );
 }
 
 export default function App() {

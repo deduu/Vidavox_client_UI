@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem("token", access_token);
     const me = await fetchCurrentUser();
     setUser(me);
-    navigate("/dashboard");
+    navigate("/chat");
   };
 
   const register = async (data) => {

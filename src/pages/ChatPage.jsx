@@ -1,15 +1,16 @@
-// pages/ChatPage.jsx
+// Updated ChatPage.jsx
 import React, { useEffect, useState, useRef } from "react";
 import SidebarLayout from "../components/SidebarLayout";
 import ChatMessage from "../components/ChatMessage";
 import ChatInput from "../components/ChatInput";
-import MultiModelChatPanel from "../components/MultiModelChatPanel";
+import KnowledgeBaseSelector from "../components/KnowledgeBaseSelector"; // Import the new component
 import { useChatSession } from "../contexts/ChatSessionContext";
 import {
   sendChatMessage,
   listKnowledgeBases,
   chatDirect,
   chatDirectStream,
+  listLLMs,
 } from "../services/api";
 
 export default function ChatPage() {
@@ -18,12 +19,12 @@ export default function ChatPage() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
 
-  // KB state
+  // KB state - Updated to support multiple selections
   const [kbs, setKbs] = useState([]);
-  const [selectedKb, setSelectedKb] = useState("");
+  const [selectedKbs, setSelectedKbs] = useState([]); // Changed from selectedKb to selectedKbs
 
   // LLM options
-  const [model, setModel] = useState("openai");
+  const [model, setModel] = useState("gemini 2.0 Flash");
   const [streaming, setStreaming] = useState(true);
   const [maxTokens, setMaxTokens] = useState(1024);
   const [temperature, setTemperature] = useState(0.8);
@@ -32,29 +33,49 @@ export default function ChatPage() {
   const {
     chats,
     currentChatId,
-    setCurrentChatId,
-    createNewChat,
     sendMessageToCurrentChat,
     loadMessagesForCurrentChat,
     messagesMap,
+    renameChat,
   } = useChatSession();
 
+  const [availableModels, setAvailableModels] = useState([]);
   const [history, setHistory] = useState([]);
 
   // --- sanity‐check your chats/history so history.map never crashes ---
-  console.log("🏷️ chats:", chats);
-  console.log("🏷️ currentChatId:", currentChatId);
+  // console.log("🏷️ chats:", chats);
+  // console.log("🏷️ currentChatId:", currentChatId);
   const activeChat = chats.find((c) => c.id === currentChatId);
-  console.log("🏷️ activeChat:", activeChat);
+  // console.log("🏷️ activeChat:", activeChat);
+
+  /* ----- load on mount ----- */
+  useEffect(() => {
+    listLLMs()
+      .then((list) => {
+        setAvailableModels(list);
+
+        // choose default "Gemini 2.0 Flash" if present, else first item
+        const preferred = list.find((m) => m.id === "gemini-2.0-flash");
+        const fallback = list[0];
+        setModel((cur) =>
+          cur && list.some((m) => m.id === cur)
+            ? cur
+            : (preferred || fallback).id
+        );
+      })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     if (!currentChatId) return;
     (async () => {
       const msgs = await loadMessagesForCurrentChat();
+      console.debug("📜 Loaded chat messages:", msgs);
       setHistory(msgs);
     })();
   }, [currentChatId, messagesMap]);
-  console.log("🏷️ history:", history);
+
+  // console.log("🏷️ history:", history);
 
   const scrollRef = useRef();
 
@@ -67,7 +88,7 @@ export default function ChatPage() {
         setKbs(list);
       })
       .catch((err) => {
-        // console.error("❌ Failed to load KBs:", err);
+        console.error("❌ Failed to load KBs:", err);
       });
   }, []);
 
@@ -77,8 +98,33 @@ export default function ChatPage() {
   }, [history.length]);
 
   const sendChatMessageToBackend = async (msg) => {
-    const { role, content, citations = null, chunks = null } = msg;
-    await sendMessageToCurrentChat({ role, content, citations, chunks });
+    const { role, content, citations, chunks } = msg;
+    // console.log("📤 Sending to backend:", {
+    //   role,
+    //   content,
+    //   citations,
+    //   chunks,
+    // });
+    await sendMessageToCurrentChat({
+      role,
+      content,
+      citations,
+      chunks,
+    });
+  };
+
+  const maybeAutoRenameChat = async (msg) => {
+    if (activeChat?.title === "New Chat" && msg.role === "user") {
+      const autoTitle =
+        msg.content.split("\n")[0].slice(0, 40).trim() +
+        (msg.content.length > 40 ? "…" : "");
+
+      try {
+        await renameChat(currentChatId, autoTitle);
+      } catch (err) {
+        console.error("❌ Failed to auto-rename chat:", err);
+      }
+    }
   };
 
   const handleSend = async () => {
@@ -98,25 +144,38 @@ export default function ChatPage() {
     setSending(true);
 
     try {
-      const kb = kbs.find((k) => String(k.id) === selectedKb);
-      if (kb) {
+      // Updated to handle multiple KBs
+      if (selectedKbs.length > 0) {
         // ── ROUTE A: KB‐based RAG call ──
-        console.log("🔍 Using KB:", kb.name);
-        const fileIds = kb.files.map((f) => f.id);
+        // console.log(
+        //   "🔍 Using KBs:",
+        //   selectedKbs.map((kb) => kb.name)
+        // );
+
+        // Collect all file IDs from selected KBs
+        const allFileIds = selectedKbs.flatMap((kb) =>
+          kb.files.map((f) => f.id)
+        );
+
         const res = await sendChatMessage({
           message,
-          knowledgeBaseFileIds: fileIds,
+          knowledgeBaseFileIds: allFileIds,
         });
         console.log("✅ RAG response:", res);
         const assistantMsg = {
           role: "assistant",
           content: res.response.answer,
+          citations: res.response.citations || [],
+          chunks: res.response.used_chunks || [],
         };
-        await sendChatMessageToBackend(userMsg); // <-- send to backend
-        await sendChatMessageToBackend(assistantMsg); // <-- send to backend
+        console.log("🧠 AssistantMsg:", assistantMsg);
+        await sendChatMessageToBackend(userMsg);
+        await maybeAutoRenameChat(userMsg);
+        await sendChatMessageToBackend(assistantMsg);
         setHistory((prev) => [...prev, assistantMsg]);
       } else {
         await sendChatMessageToBackend(userMsg);
+        await maybeAutoRenameChat(userMsg);
         // ── ROUTE B: Direct LLM chat ──
         console.log(`💬 Direct chat (model=${model}, stream=${streaming})`);
 
@@ -174,73 +233,45 @@ export default function ChatPage() {
     <SidebarLayout bottomSlot="Powered by Vidavox">
       <div className="flex flex-col flex-1 h-full bg-white">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-b bg-gray-50">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-4 border-b bg-gray-50">
           <h2 className="text-xl font-bold">Agentic Chat</h2>
 
-          <div className="flex items-center gap-2">
-            {/* Model */}
-            <select
-              className="border rounded px-3 py-2"
-              value={model}
-              onChange={(e) => {
-                console.log("🔄 Model →", e.target.value);
-                setModel(e.target.value);
-              }}
-            >
-              <option value="openai">OpenAI</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Model Selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">Model</label>
+              <select
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={!availableModels.length}
+              >
+                {availableModels.map(({ id, label }) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {/* Stream Toggle */}
-            {/* <label className="flex items-center space-x-1">
-              <input
-                type="checkbox"
-                checked={streaming}
-                onChange={(e) => {
-                  console.log("🔄 Stream →", e.target.checked);
-                  setStreaming(e.target.checked);
-                }}
-                className="form-checkbox"
+            {/* Knowledge Base Selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">
+                Knowledge Bases
+              </label>
+              <KnowledgeBaseSelector
+                kbs={kbs}
+                selectedKbs={selectedKbs}
+                onSelectionChange={setSelectedKbs}
+                disabled={sending}
               />
-              <span className="text-sm">Stream</span>
-            </label> */}
-
-            {/* Chat Mode */}
-            <select
-              className="border rounded px-3 py-2"
-              value={chatMode}
-              onChange={(e) => {
-                console.log("🔄 ChatMode →", e.target.value);
-                setChatMode(e.target.value);
-              }}
-            >
-              <option value="normal">🧠 Normal</option>
-              <option value="multi">🤖 Multi-Model</option>
-            </select>
-
-            {/* KB */}
-            <select
-              className="border rounded px-3 py-2"
-              value={selectedKb}
-              onChange={(e) => {
-                console.log("🔄 KB →", e.target.value);
-                setSelectedKb(e.target.value);
-              }}
-            >
-              <option value="">🔓 No KB</option>
-              {kbs.map((kb) => (
-                <option key={kb.id} value={kb.id}>
-                  {kb.name} ({kb.file_count})
-                </option>
-              ))}
-            </select>
+            </div>
           </div>
         </div>
 
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {chatMode === "multi" ? (
-            <MultiModelChatPanel history={history} />
-          ) : history.length ? (
+          {history.length ? (
             history.map((msg, i) => (
               <ChatMessage
                 key={i}
