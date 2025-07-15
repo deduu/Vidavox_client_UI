@@ -267,8 +267,12 @@ export async function sendChatMessage({ message, knowledgeBaseFileIds }) {
   form.append("prompt_type", "agentic");
   form.append("search_mode", "hybrid");
   form.append("top_k", 10);
-  form.append("threshold", 0.4);
-  form.append("prefixes", knowledgeBaseFileIds);
+  form.append("threshold", 0.2);
+
+  // ✅ Append each prefix (fileId) individually
+  for (const fileId of knowledgeBaseFileIds) {
+    form.append("prefixes", fileId); // not just once as a comma-separated string
+  }
 
   const res = await fetch(`${API_URL}/analysis/perform_rag`, {
     method: "POST",

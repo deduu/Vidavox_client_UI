@@ -20,26 +20,22 @@ export default function KnowledgeBaseSelector({
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
 
-  // Filter KBs based on search term
   const filteredKbs = kbs.filter(
     (kb) =>
       kb.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       kb.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Handle clicks outside dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Focus search input when dropdown opens
   useEffect(() => {
     if (isOpen && searchInputRef.current) {
       searchInputRef.current.focus();
@@ -48,19 +44,23 @@ export default function KnowledgeBaseSelector({
 
   const handleKbToggle = (kb) => {
     const isSelected = selectedKbs.some((selected) => selected.id === kb.id);
-    let newSelection;
-
-    if (isSelected) {
-      newSelection = selectedKbs.filter((selected) => selected.id !== kb.id);
-    } else {
-      newSelection = [...selectedKbs, kb];
-    }
-
+    const newSelection = isSelected
+      ? selectedKbs.filter((selected) => selected.id !== kb.id)
+      : [...selectedKbs, kb];
+    console.log(
+      "🔄 New KB selection:",
+      newSelection.map((k) => k.id)
+    );
     onSelectionChange(newSelection);
   };
 
   const handleRemoveKb = (kbToRemove) => {
     const newSelection = selectedKbs.filter((kb) => kb.id !== kbToRemove.id);
+    console.log("❌ Removed KB:", kbToRemove.id);
+    console.log(
+      "🔄 After removal:",
+      newSelection.map((k) => k.id)
+    );
     onSelectionChange(newSelection);
   };
 
@@ -69,12 +69,8 @@ export default function KnowledgeBaseSelector({
   };
 
   const getDisplayText = () => {
-    if (selectedKbs.length === 0) {
-      return "Select Knowledge Bases";
-    }
-    if (selectedKbs.length === 1) {
-      return selectedKbs[0].name;
-    }
+    if (selectedKbs.length === 0) return "Select Knowledge Bases";
+    if (selectedKbs.length === 1) return selectedKbs[0].name;
     return `${selectedKbs.length} Knowledge Bases Selected`;
   };
 
@@ -84,7 +80,7 @@ export default function KnowledgeBaseSelector({
       <button
         type="button"
         className={`
-          relative w-full min-w-64 px-4 py-2.5 text-left bg-white border border-gray-300 rounded-lg shadow-sm
+          relative w-full min-w-[16rem] px-4 py-2.5 text-left bg-white border border-gray-300 rounded-lg shadow-sm
           hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
           transition-colors duration-200
           ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
@@ -107,40 +103,10 @@ export default function KnowledgeBaseSelector({
         </div>
       </button>
 
-      {/* Selected KBs Pills */}
-      {selectedKbs.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {selectedKbs.map((kb) => (
-            <div
-              key={kb.id}
-              className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
-            >
-              <span className="truncate max-w-32">{kb.name}</span>
-              <button
-                type="button"
-                className="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
-                onClick={() => handleRemoveKb(kb)}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-          {selectedKbs.length > 1 && (
-            <button
-              type="button"
-              className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 underline"
-              onClick={handleClearAll}
-            >
-              Clear all
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Dropdown */}
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-hidden">
-          {/* Search Input */}
+          {/* Search */}
           <div className="p-3 border-b border-gray-200">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -171,8 +137,7 @@ export default function KnowledgeBaseSelector({
                 return (
                   <div
                     key={kb.id}
-                    className={`
-                      px-4 py-3 cursor-pointer transition-colors duration-150
+                    className={`px-4 py-3 cursor-pointer transition-colors duration-150
                       hover:bg-gray-50 border-b border-gray-100 last:border-b-0
                       ${isSelected ? "bg-blue-50 border-blue-100" : ""}
                     `}
@@ -181,14 +146,11 @@ export default function KnowledgeBaseSelector({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div
-                          className={`
-                          w-4 h-4 border-2 rounded flex items-center justify-center
-                          ${
+                          className={`w-4 h-4 border-2 rounded flex items-center justify-center ${
                             isSelected
                               ? "bg-blue-500 border-blue-500"
                               : "border-gray-300"
-                          }
-                        `}
+                          }`}
                         >
                           {isSelected && (
                             <Check className="w-3 h-3 text-white" />
@@ -237,6 +199,38 @@ export default function KnowledgeBaseSelector({
           )}
         </div>
       )}
+
+      {/* Selected KB Chips */}
+      {/* {selectedKbs.length > 0 && (
+        <div className="absolute top-full right-0 mt-2 z-10">
+          <div className="flex flex-wrap gap-1 justify-end">
+            {selectedKbs.map((kb) => (
+              <div
+                key={kb.id}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
+              >
+                <span className="truncate max-w-[8rem]">{kb.name}</span>
+                <button
+                  type="button"
+                  className="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
+                  onClick={() => handleRemoveKb(kb)}
+                >
+                  <span className="sr-only">Remove</span>×
+                </button>
+              </div>
+            ))}
+            {selectedKbs.length > 1 && (
+              <button
+                type="button"
+                className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 underline"
+                onClick={handleClearAll}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        </div>
+      )} */}
     </div>
   );
 }

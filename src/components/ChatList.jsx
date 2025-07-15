@@ -32,7 +32,7 @@ export default function ChatList({
 
   return (
     <div className="w-full bg-white p-0 space-y-2 overflow-x-hidden">
-      <h2 className="font-bold text-xl mb-4">💬 My Chats</h2>
+      {/* <h2 className="font-bold text-xl mb-4">💬 My Chats</h2> */}
       <button
         onClick={onCreate}
         className="mb-2 px-3 py-2 text-sm text-blue-600 bg-blue-50 hover:bg-blue-100 rounded w-full text-left"
