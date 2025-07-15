@@ -161,7 +161,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
   }
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
-      <div className="relative max-w-lg group">
+      <div className="relative max-w-2xl group">
         <div
           className={`p-3 rounded-lg max-w-none ${
             isUser ? "bg-blue-100 text-right" : "bg-gray-100"

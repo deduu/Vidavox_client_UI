@@ -386,58 +386,66 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Chat Area - Now takes up more space */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {history.length ? (
-            history.map((msg, i) => (
-              <ChatMessage
-                key={i}
-                msg={msg}
-                onCopy={() => navigator.clipboard.writeText(msg.content)}
-                onDownload={(m) => {
-                  const blob = new Blob([m.content], { type: "text/plain" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "message.txt";
-                  a.click();
-                }}
-              />
-            ))
-          ) : (
-            <div className="text-center text-gray-500 mt-8">
-              <div className="text-lg font-medium mb-2">
-                Welcome to Agentic Chat
-              </div>
-              <p className="text-sm">
-                {hasKnowledgeBases
-                  ? "Your knowledge bases are ready. Start asking questions!"
-                  : "Start typing to begin the conversation or select knowledge bases for enhanced responses."}
-              </p>
+        {/* Chat Area - Centered with max width */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            <div className="space-y-6">
+              {history.length ? (
+                history.map((msg, i) => (
+                  <ChatMessage
+                    key={i}
+                    msg={msg}
+                    onCopy={() => navigator.clipboard.writeText(msg.content)}
+                    onDownload={(m) => {
+                      const blob = new Blob([m.content], {
+                        type: "text/plain",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "message.txt";
+                      a.click();
+                    }}
+                  />
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-12">
+                  <div className="text-xl font-medium mb-3">
+                    Welcome to Agentic Chat
+                  </div>
+                  <p className="text-sm max-w-md mx-auto">
+                    {hasKnowledgeBases
+                      ? "Your knowledge bases are ready. Start asking questions!"
+                      : "Start typing to begin the conversation or select knowledge bases for enhanced responses."}
+                  </p>
+                </div>
+              )}
+              {sending && (
+                <div className="text-gray-500 italic flex items-center gap-2 justify-center py-4">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse delay-100"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse delay-200"></div>
+                  </div>
+                  Assistant is typing...
+                </div>
+              )}
             </div>
-          )}
-          {sending && (
-            <div className="text-gray-500 italic flex items-center gap-2">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse delay-100"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse delay-200"></div>
-              </div>
-              Assistant is typing...
-            </div>
-          )}
+          </div>
           <div ref={scrollRef} />
         </div>
 
-        {/* Input Area - Compact */}
-        <div className="flex-shrink-0 border-t bg-white">
-          <div className="p-4">
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              onSend={handleSend}
-              disabled={sending}
-            />
+        {/* Input Area - Modern rounded design */}
+        <div className="flex-shrink-0 bg-gradient-to-t from-white via-white to-white/80 pt-4 pb-6">
+          <div className="max-w-4xl mx-auto px-4">
+            <div className="bg-white rounded-2xl border border-gray-200/50 overflow-visible">
+              <ChatInput
+                message={message}
+                setMessage={setMessage}
+                onSend={handleSend}
+                disabled={sending}
+              />
+            </div>
           </div>
         </div>
       </div>
