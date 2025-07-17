@@ -3,6 +3,7 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
 import MessageActions from "./MessageActions";
+import { FileText } from "lucide-react"; //
 
 // === Format-specific Renderers ===
 
@@ -167,6 +168,18 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
             isUser ? "bg-blue-100 text-right" : "bg-gray-100"
           }`}
         >
+          {msg.file && (
+            <div
+              className={`mb-3 flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
+                isUser
+                  ? "bg-blue-200 text-blue-800"
+                  : "bg-gray-200 text-gray-700"
+              } ${isUser ? "justify-end" : "justify-start"}`}
+            >
+              <FileText size={16} />
+              <span>{msg.file.name}</span>
+            </div>
+          )}
           <div className="prose max-w-none">{renderContent(msg)}</div>
 
           {/* Floating Action Bar (assistant only) */}

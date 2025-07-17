@@ -261,17 +261,27 @@ export async function deleteKnowledgeBase(kbId) {
   return data;
 }
 
-export async function sendChatMessage({ message, knowledgeBaseFileIds }) {
+export async function sendChatMessage({
+  message,
+  knowledgeBaseFileIds,
+  topK,
+  threshold,
+  file,
+}) {
   const form = new FormData();
   form.append("query", message);
   form.append("prompt_type", "agentic");
   form.append("search_mode", "hybrid");
-  form.append("top_k", 10);
-  form.append("threshold", 0.2);
+  form.append("top_k", topK);
+  form.append("threshold", threshold);
 
   // ✅ Append each prefix (fileId) individually
   for (const fileId of knowledgeBaseFileIds) {
     form.append("prefixes", fileId); // not just once as a comma-separated string
+  }
+
+  if (file) {
+    form.append("file", file); // Append the actual File object
   }
 
   const res = await fetch(`${API_URL}/analysis/perform_rag`, {
@@ -310,19 +320,33 @@ export async function chatDirect({
   messages,
   max_tokens = 512,
   temperature = 0.8,
+  file,
 }) {
-  const payload = { model, messages, max_tokens, temperature, stream: false };
+  const formData = new FormData();
+  formData.append("model", model);
+  formData.append("messages", JSON.stringify(messages));
+  formData.append("max_tokens", max_tokens);
+  formData.append("temperature", temperature);
+  formData.append("stream", "false");
+
+  if (file) {
+    if (file.type.startsWith("image/")) {
+      formData.append("attached_image", file);
+    } else {
+      formData.append("attached_file", file);
+    }
+  }
+
   const res = await fetch(`${API_URL}/chat/chat-direct`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      ...authHeader(),
+      ...authHeader(), // ✅ Do NOT set "Content-Type"
     },
-    body: JSON.stringify(payload),
+    body: formData,
   });
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "chat-direct failed");
-  // your backend wraps text in { text: answer }
   return data.text;
 }
 
@@ -332,22 +356,36 @@ export async function* chatDirectStream({
   messages,
   max_tokens = 512,
   temperature = 0.8,
+  file,
 }) {
-  const payload = { model, messages, max_tokens, temperature, stream: true };
+  const formData = new FormData();
+  formData.append("model", model);
+  formData.append("messages", JSON.stringify(messages));
+  formData.append("max_tokens", max_tokens);
+  formData.append("temperature", temperature);
+  formData.append("stream", "true");
+
+  if (file) {
+    if (file.type.startsWith("image/")) {
+      formData.append("attached_image", file);
+    } else {
+      formData.append("attached_file", file);
+    }
+  }
+
   const res = await fetch(`${API_URL}/chat/chat-direct`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      ...authHeader(),
+      ...authHeader(), // ✅ No Content-Type here
     },
-    body: JSON.stringify(payload),
+    body: formData,
   });
+
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.detail || "chat-direct stream failed");
   }
 
-  // Read the text/event-stream
   const reader = res.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buf = "";
@@ -355,9 +393,10 @@ export async function* chatDirectStream({
     const { value, done } = await reader.read();
     if (done) break;
     buf += decoder.decode(value, { stream: true });
-    // SSE-style: lines beginning with "data: "
+
     const parts = buf.split("\n\n");
-    buf = parts.pop(); // leftover
+    buf = parts.pop();
+
     for (const chunk of parts) {
       if (chunk.startsWith("data:")) {
         const jsonStr = chunk.replace(/^data:\s*/, "");
@@ -365,7 +404,7 @@ export async function* chatDirectStream({
           const { text } = JSON.parse(jsonStr);
           yield text;
         } catch {
-          // ignore non-JSON ping events
+          // Ignore malformed events
         }
       }
     }

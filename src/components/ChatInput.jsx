@@ -1,13 +1,24 @@
 import { useRef, useEffect, useState } from "react";
-import { Plus, Settings, Mic, Send, Upload, HardDrive, X } from "lucide-react";
+import {
+  Plus,
+  Settings,
+  Mic,
+  Send,
+  Upload,
+  HardDrive,
+  X,
+  FileText,
+} from "lucide-react"; // Import FileText icon
 
 export default function ChatInput({
   message,
   setMessage,
   onSend,
-  onAttachFile,
+  onAttachFile, // This prop will now directly receive the File object
   onPasteImage,
   disabled,
+  attachedFile, // New prop to receive the attached file from parent
+  onRemoveAttachedFile, // New prop to signal removal of attached file
 }) {
   const fileInputRef = useRef();
   const textareaRef = useRef();
@@ -41,9 +52,15 @@ export default function ChatInput({
     }
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      onAttachFile?.(e.target.files[0]); // Pass the File object directly
+    }
+    setShowUploadDialog(false);
+  };
+
   const handleFileUpload = () => {
     fileInputRef.current?.click();
-    setShowUploadDialog(false);
   };
 
   const handleDriveUpload = () => {
@@ -70,56 +87,73 @@ export default function ChatInput({
           ref={fileInputRef}
           type="file"
           className="hidden"
-          onChange={(e) => onAttachFile?.(e.target.files[0])}
+          onChange={handleFileChange}
         />
 
         {/* Main input container */}
         <div className="flex-1 relative">
-          <div className="flex items-end bg-gray-50 rounded-3xl border border-gray-200 focus-within:border-gray-300 focus-within:bg-white transition-colors">
-            <textarea
-              ref={textareaRef}
-              className="flex-1 bg-transparent px-4 py-3 text-gray-900 placeholder-gray-500 resize-none border-none outline-none"
-              rows={1}
-              placeholder="Ask anything"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              disabled={disabled}
-              style={{
-                maxHeight: "160px",
-                overflowY: "auto",
-                minHeight: "24px",
-              }}
-            />
+          <div className="flex flex-col bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-gray-300 focus-within:bg-white transition-colors">
+            {attachedFile && (
+              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white rounded-t-2xl">
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <FileText size={16} className="text-gray-500" />
+                  <span>{attachedFile.name}</span>
+                </div>
+                <button
+                  onClick={onRemoveAttachedFile}
+                  className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                  title="Remove file"
+                >
+                  <X size={14} className="text-gray-500" />
+                </button>
+              </div>
+            )}
+            <div className="flex items-end">
+              <textarea
+                ref={textareaRef}
+                className="flex-1 bg-transparent px-4 py-3 text-gray-900 placeholder-gray-500 resize-none border-none outline-none"
+                rows={1}
+                placeholder="Ask anything"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                disabled={disabled}
+                style={{
+                  maxHeight: "160px",
+                  overflowY: "auto",
+                  minHeight: "24px",
+                }}
+              />
 
-            {/* Right side buttons */}
-            <div className="flex items-center gap-2 px-3 py-2">
-              {/* Settings/Tools button */}
-              <button
-                className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
-                title="Tools"
-              >
-                <Settings size={16} className="text-gray-600" />
-              </button>
+              {/* Right side buttons */}
+              <div className="flex items-center gap-2 px-3 py-2">
+                {/* Settings/Tools button */}
+                <button
+                  className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                  title="Tools"
+                >
+                  <Settings size={16} className="text-gray-600" />
+                </button>
 
-              {/* Microphone button */}
-              <button
-                className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
-                title="Voice input"
-              >
-                <Mic size={16} className="text-gray-600" />
-              </button>
+                {/* Microphone button */}
+                <button
+                  className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                  title="Voice input"
+                >
+                  <Mic size={16} className="text-gray-600" />
+                </button>
 
-              {/* Send button */}
-              <button
-                onClick={onSend}
-                disabled={disabled || !message.trim()}
-                className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Send message"
-              >
-                <Send size={16} className="text-white" />
-              </button>
+                {/* Send button */}
+                <button
+                  onClick={onSend}
+                  disabled={disabled || (!message.trim() && !attachedFile)} // Disable send if no message or file
+                  className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Send message"
+                >
+                  <Send size={16} className="text-white" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

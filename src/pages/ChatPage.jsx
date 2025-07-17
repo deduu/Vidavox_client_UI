@@ -12,7 +12,7 @@ import {
   chatDirectStream,
   listLLMs,
 } from "../services/api";
-import { X, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { X, ChevronDown, ChevronUp, Settings, FileText } from "lucide-react"; // Import FileText
 
 export default function ChatPage() {
   const [chatMode, setChatMode] = useState("normal");
@@ -46,6 +46,7 @@ export default function ChatPage() {
   const activeChat = chats.find((c) => c.id === currentChatId);
 
   const scrollRef = useRef();
+  const [attachedFile, setAttachedFile] = useState(null); // New state for attached file
 
   useEffect(() => {
     listLLMs()
@@ -81,8 +82,8 @@ export default function ChatPage() {
   }, [history.length]);
 
   const sendChatMessageToBackend = async (msg) => {
-    const { role, content, citations, chunks } = msg;
-    await sendMessageToCurrentChat({ role, content, citations, chunks });
+    const { role, content, citations, chunks, file } = msg; // Include file
+    await sendMessageToCurrentChat({ role, content, citations, chunks, file });
   };
 
   const maybeAutoRenameChat = async (msg) => {
@@ -99,12 +100,19 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() && !attachedFile) return; // Allow sending with only a file
 
-    const userMsg = { role: "user", content: message };
+    const userMsg = {
+      role: "user",
+      content: message,
+      file: attachedFile
+        ? { name: attachedFile.name, type: attachedFile.type }
+        : null,
+    }; // Store file info
     const baseHistory = [...history, userMsg];
     setHistory(baseHistory);
     setMessage("");
+    setAttachedFile(null); // Clear attached file after sending
     setSending(true);
 
     try {
@@ -113,12 +121,15 @@ export default function ChatPage() {
           kb.files.map((f) => f.id)
         );
         console.log("🔍 Using KBs:", allFileIds);
+
         const res = await sendChatMessage({
           message,
           knowledgeBaseFileIds: allFileIds,
           topK,
           threshold,
+          file: attachedFile, // Optional
         });
+
         const assistantMsg = {
           role: "assistant",
           content: res.response.answer,
@@ -133,15 +144,22 @@ export default function ChatPage() {
         await sendChatMessageToBackend(userMsg);
         await maybeAutoRenameChat(userMsg);
 
+        // For direct chat, you might also need to adjust your chatDirect/chatDirectStream
+        // to handle file uploads if your LLM supports it. This example assumes
+        // the file is metadata for the user message in history, not sent to LLM directly.
         if (streaming) {
           const assistantMsg = { role: "assistant", content: "" };
           setHistory((prev) => [...prev, assistantMsg]);
 
           for await (const token of chatDirectStream({
             model,
-            messages: baseHistory,
+            messages: baseHistory.map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+            })), // Send only text content to LLM
             max_tokens: maxTokens,
             temperature,
+            file: attachedFile, // Optional
           })) {
             assistantMsg.content += token;
             setHistory((prev) => {
@@ -158,9 +176,13 @@ export default function ChatPage() {
         } else {
           const reply = await chatDirect({
             model,
-            messages: baseHistory,
+            messages: baseHistory.map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+            })), // Send only text content to LLM
             max_tokens: maxTokens,
             temperature,
+            file: attachedFile, // Optional
           });
           const assistantMsg = { role: "assistant", content: reply };
           await sendChatMessageToBackend(assistantMsg);
@@ -176,6 +198,14 @@ export default function ChatPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleAttachFile = (file) => {
+    setAttachedFile(file);
+  };
+
+  const handleRemoveAttachedFile = () => {
+    setAttachedFile(null);
   };
 
   const hasKnowledgeBases = selectedKbs.length > 0;
@@ -444,6 +474,9 @@ export default function ChatPage() {
                 setMessage={setMessage}
                 onSend={handleSend}
                 disabled={sending}
+                onAttachFile={handleAttachFile} // Pass the handler
+                attachedFile={attachedFile} // Pass the attached file state
+                onRemoveAttachedFile={handleRemoveAttachedFile} // Pass the removal handler
               />
             </div>
           </div>
