@@ -321,6 +321,7 @@ export async function chatDirect({
   max_tokens = 512,
   temperature = 0.8,
   file,
+  session_id,
 }) {
   const formData = new FormData();
   formData.append("model", model);
@@ -328,6 +329,7 @@ export async function chatDirect({
   formData.append("max_tokens", max_tokens);
   formData.append("temperature", temperature);
   formData.append("stream", "false");
+  formData.append("session_id", session_id);
 
   if (file) {
     if (file.type.startsWith("image/")) {
@@ -347,7 +349,7 @@ export async function chatDirect({
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "chat-direct failed");
-  return data.text;
+  return data;
 }
 
 // streaming chat (async-iterator of tokens)
@@ -357,6 +359,7 @@ export async function* chatDirectStream({
   max_tokens = 512,
   temperature = 0.8,
   file,
+  session_id,
 }) {
   const formData = new FormData();
   formData.append("model", model);
@@ -364,6 +367,7 @@ export async function* chatDirectStream({
   formData.append("max_tokens", max_tokens);
   formData.append("temperature", temperature);
   formData.append("stream", "true");
+  formData.append("session_id", session_id);
 
   if (file) {
     if (file.type.startsWith("image/")) {

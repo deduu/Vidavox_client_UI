@@ -82,8 +82,28 @@ export default function ChatPage() {
   }, [history.length]);
 
   const sendChatMessageToBackend = async (msg) => {
-    const { role, content, citations, chunks, file } = msg; // Include file
-    await sendMessageToCurrentChat({ role, content, citations, chunks, file });
+    console.log("🔸 to‑Backend (frontend):", msg); // <‑‑ add
+    const {
+      role,
+      content,
+      citations,
+      chunks,
+      file,
+      file_url,
+      file_name,
+      file_type,
+    } = msg; // Include file
+    await sendMessageToCurrentChat({
+      role,
+      content,
+      citations,
+      chunks,
+      file,
+      file_url,
+      file_name,
+      file_type,
+    });
+    // await sendMessageToCurrentChat({ role, content, citations, chunks, file });
   };
 
   const maybeAutoRenameChat = async (msg) => {
@@ -99,16 +119,28 @@ export default function ChatPage() {
     }
   };
 
+  const fileToDataUrl = (file) =>
+    new Promise((res) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result); // "data:image/png;base64,…"
+      fr.readAsDataURL(file);
+    });
+
   const handleSend = async () => {
     if (!message.trim() && !attachedFile) return; // Allow sending with only a file
-
+    const sessionId = currentChatId || "default";
+    const previewUrl = attachedFile ? await fileToDataUrl(attachedFile) : null;
+    console.log("📥 previewUrl:", previewUrl);
     const userMsg = {
       role: "user",
       content: message,
       file: attachedFile
         ? { name: attachedFile.name, type: attachedFile.type }
         : null,
-    }; // Store file info
+      file_url: previewUrl, // now a data‑URL, not blob
+    };
+    await sendChatMessageToBackend(userMsg); // backend stores data‑URL
+    // Store file info
     const baseHistory = [...history, userMsg];
     setHistory(baseHistory);
     setMessage("");
@@ -116,6 +148,12 @@ export default function ChatPage() {
     setSending(true);
 
     try {
+      // Revoke preview URL later to prevent memory leak
+      if (previewUrl) {
+        setTimeout(() => {
+          URL.revokeObjectURL(previewUrl);
+        }, 10000); // 10 seconds is safe for display
+      }
       if (selectedKbs.length > 0) {
         const allFileIds = selectedKbs.flatMap((kb) =>
           kb.files.map((f) => f.id)
@@ -136,30 +174,30 @@ export default function ChatPage() {
           citations: res.response.citations || [],
           chunks: res.response.used_chunks || [],
         };
-        await sendChatMessageToBackend(userMsg);
+        // await sendChatMessageToBackend(userMsg);
         await maybeAutoRenameChat(userMsg);
         await sendChatMessageToBackend(assistantMsg);
         setHistory((prev) => [...prev, assistantMsg]);
       } else {
-        await sendChatMessageToBackend(userMsg);
+        // await sendChatMessageToBackend(userMsg);
         await maybeAutoRenameChat(userMsg);
 
-        // For direct chat, you might also need to adjust your chatDirect/chatDirectStream
-        // to handle file uploads if your LLM supports it. This example assumes
-        // the file is metadata for the user message in history, not sent to LLM directly.
-        if (streaming) {
+        const mustStream = streaming && !attachedFile;
+        if (mustStream) {
           const assistantMsg = { role: "assistant", content: "" };
           setHistory((prev) => [...prev, assistantMsg]);
 
           for await (const token of chatDirectStream({
             model,
-            messages: baseHistory.map((msg) => ({
-              role: msg.role,
-              content: msg.content,
-            })), // Send only text content to LLM
+            // messages: baseHistory.map((msg) => ({
+            //   role: msg.role,
+            //   content: msg.content,
+            // })),
+            messages: [{ role: "user", content: message }], // Send only text content to LLM
             max_tokens: maxTokens,
             temperature,
             file: attachedFile, // Optional
+            session_id: sessionId,
           })) {
             assistantMsg.content += token;
             setHistory((prev) => {
@@ -176,15 +214,21 @@ export default function ChatPage() {
         } else {
           const reply = await chatDirect({
             model,
-            messages: baseHistory.map((msg) => ({
-              role: msg.role,
-              content: msg.content,
-            })), // Send only text content to LLM
+            // messages: baseHistory.map((msg) => ({
+            //   role: msg.role,
+            //   content: msg.content,
+            // })),
+            messages: [{ role: "user", content: message }], // Send only text content to LLM
             max_tokens: maxTokens,
             temperature,
             file: attachedFile, // Optional
+            session_id: sessionId,
           });
-          const assistantMsg = { role: "assistant", content: reply };
+          const assistantMsg = {
+            role: "assistant",
+            content: reply.text,
+            // file_url: reply.file_url || null,
+          };
           await sendChatMessageToBackend(assistantMsg);
           setHistory((prev) => [...prev, assistantMsg]);
         }
@@ -399,17 +443,6 @@ export default function ChatPage() {
                       className="w-full"
                     />
                   </div>
-
-                  <div>
-                    <label className="flex items-center gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={streaming}
-                        onChange={(e) => setStreaming(e.target.checked)}
-                      />
-                      <span className="text-gray-600">Streaming</span>
-                    </label>
-                  </div>
                 </div>
               </div>
             </div>
@@ -451,7 +484,7 @@ export default function ChatPage() {
                 </div>
               )}
               {sending && (
-                <div className="text-gray-500 italic flex items-center gap-2 justify-center py-4">
+                <div className="text-gray-500 italic flex items-center gap-2 justify-left py-4">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse delay-100"></div>

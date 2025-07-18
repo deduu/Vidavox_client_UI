@@ -90,7 +90,17 @@ export function ChatSessionProvider({ children }) {
     content,
     citations,
     chunks,
+    file_url,
+    file_name,
+    file_type,
   }) => {
+    console.log("🔸 addChatMessage payload:", {
+      role,
+      content,
+      file_url,
+      file_name,
+      file_type,
+    });
     if (!currentChatId) return;
 
     const newMsg = await addChatMessage(currentChatId, {
@@ -98,6 +108,9 @@ export function ChatSessionProvider({ children }) {
       content,
       citations: citations ? JSON.stringify(citations) : null,
       chunks: chunks ? JSON.stringify(chunks) : null,
+      file_url,
+      file_name,
+      file_type,
     });
 
     // Update messages map cache

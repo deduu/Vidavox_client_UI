@@ -94,8 +94,8 @@ const renderContent = (msg) => {
   const content = typeof msg.content === "string" ? msg.content.trim() : "";
   if (!content) return <TextRenderer content="" />;
   // console.log("📥 Rendering message:", msg);
-  console.log("📎 Citations:", msg.citations);
-  console.log("📦 Chunks:", msg.chunks);
+  // console.log("📎 Citations:", msg.citations);
+  // console.log("📦 Chunks:", msg.chunks);
 
   // Try JSON
   try {
@@ -180,6 +180,18 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
               <span>{msg.file.name}</span>
             </div>
           )}
+          {msg.file_url &&
+            (msg.file_url.startsWith("data:image/") ||
+              msg.file_url.startsWith("blob:")) && (
+              <div className="my-2">
+                <img
+                  src={msg.file_url}
+                  alt="Uploaded"
+                  className="rounded max-w-xs border shadow"
+                />
+              </div>
+            )}
+
           <div className="prose max-w-none">{renderContent(msg)}</div>
 
           {/* Floating Action Bar (assistant only) */}
@@ -202,7 +214,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
             msg.citations.length > 0 && (
               <ul className="mt-4 text-xs text-gray-500 space-y-2">
                 {msg.citations.map((c, i) => {
-                  console.debug("📎 Rendering citation:", c);
+                  // console.debug("📎 Rendering citation:", c);
                   if (!c?.source) {
                     return (
                       <li key={i} className="text-red-500">
