@@ -24,6 +24,8 @@ export default function ChatPage() {
   const [selectedKbs, setSelectedKbs] = useState([]);
 
   const [model, setModel] = useState("gemini 2.0 Flash");
+  const [missingApiKey, setMissingApiKey] = useState(null); // null or a string
+
   const [streaming, setStreaming] = useState(true);
   const [maxTokens, setMaxTokens] = useState(1024);
   const [temperature, setTemperature] = useState(0.8);
@@ -62,6 +64,9 @@ export default function ChatPage() {
       })
       .catch(console.error);
   }, []);
+  useEffect(() => {
+    console.log("📌 Model changed to:", model);
+  }, [model]);
 
   useEffect(() => {
     if (!currentChatId) return;
@@ -184,8 +189,9 @@ export default function ChatPage() {
 
         const mustStream = streaming && !attachedFile;
         if (mustStream) {
+          let gotFirst = false;
           const assistantMsg = { role: "assistant", content: "" };
-          setHistory((prev) => [...prev, assistantMsg]);
+          // setHistory((prev) => [...prev, assistantMsg]);
 
           for await (const token of chatDirectStream({
             model,
@@ -199,12 +205,19 @@ export default function ChatPage() {
             file: attachedFile, // Optional
             session_id: sessionId,
           })) {
-            assistantMsg.content += token;
-            setHistory((prev) => {
-              const copy = [...prev];
-              copy[copy.length - 1] = { ...assistantMsg };
-              return copy;
-            });
+            if (!gotFirst) {
+              gotFirst = true;
+              assistantMsg = { role: "assistant", content: token };
+              setHistory((prev) => [...prev, assistantMsg]);
+            } else {
+              assistantMsg.content += token;
+              setHistory((prev) => {
+                const copy = [...prev];
+                copy[copy.length - 1] = { ...assistantMsg };
+                return copy;
+              });
+            }
+
             setTimeout(() => {
               scrollRef.current?.scrollIntoView({ behavior: "smooth" });
             }, 10);
@@ -235,10 +248,26 @@ export default function ChatPage() {
       }
     } catch (err) {
       console.error("❌ handleSend error:", err);
-      setHistory((prev) => [
-        ...prev,
-        { role: "assistant", content: "⚠️ Something went wrong." },
-      ]);
+
+      const status = err?.response?.status;
+      const serverMsg = err?.response?.data?.detail;
+      const msg = serverMsg || err?.message || String(err);
+
+      const isMissingKey =
+        status === 401 ||
+        status === 403 ||
+        /missing\s*api\s*key/i.test(msg) ||
+        /api key.*missing/i.test(msg);
+
+      if (isMissingKey) {
+        console.warn("🚨 setting missingApiKey:", msg);
+        setMissingApiKey(msg);
+      } else {
+        setHistory((prev) => [
+          ...prev,
+          { role: "assistant", content: "⚠️ Something went wrong." },
+        ]);
+      }
     } finally {
       setSending(false);
     }
@@ -452,6 +481,26 @@ export default function ChatPage() {
         {/* Chat Area - Centered with max width */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-4 py-6">
+            {/* 👇 Add warning here */}
+            {missingApiKey && (
+              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow">
+                <p className="font-medium">Missing API Key</p>
+                <p className="text-sm">{missingApiKey}</p>
+                <p className="mt-2 text-sm">
+                  Please{" "}
+                  <a href="/profile" className="underline text-blue-600">
+                    go to your profile
+                  </a>{" "}
+                  and add the API key to continue using this model.
+                </p>
+                <button
+                  className="mt-3 text-xs bg-yellow-500 text-white px-3 py-1 rounded"
+                  onClick={() => setMissingApiKey(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
             <div className="space-y-6">
               {history.length ? (
                 history.map((msg, i) => (

@@ -9,6 +9,7 @@ import VerifyEmailPage from "./pages/VerifyEmailPage";
 import DashboardPage from "./pages/DashboardPage";
 import ChatPage from "./pages/ChatPage";
 import KnowledgeBaseManagerPage from "./pages/KnowledgeBaseManagerPage";
+import ProfileSettingsPage from "./pages/ProfileSettingsPage";
 import { ChatSessionProvider } from "./contexts/ChatSessionContext";
 
 function PrivateRoute({ children }) {
@@ -51,6 +52,14 @@ export default function App() {
         element={
           <PrivateRoute>
             <ChatPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <PrivateRoute>
+            <ProfileSettingsPage />
           </PrivateRoute>
         }
       />

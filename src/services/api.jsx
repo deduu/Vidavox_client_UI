@@ -522,3 +522,35 @@ export async function listLLMs() {
   if (!res.ok) throw new Error(data.detail || "Failed to load LLM list");
   return data;
 }
+
+export async function getApiKeys() {
+  const res = await fetch(`${API_URL}/profile/me/api-keys`, {
+    method: "GET",
+    headers: {
+      ...authHeader(),
+    },
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to fetch API keys");
+  }
+  return await res.json(); // returns a dictionary like { "gpt-4o": "sk-...", ... }
+}
+
+export async function updateApiKeys(keys) {
+  const res = await fetch(`${API_URL}/profile/me/api-keys`, {
+    method: "POST",
+    headers: {
+      ...authHeader(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ keys }), // { keys: { "gpt-4o": "sk-...", ... } }
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to update API keys");
+  }
+
+  return await res.json(); // returns { status: "ok", updated_keys: [...] }
+}
