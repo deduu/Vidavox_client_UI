@@ -190,7 +190,7 @@ export default function ChatPage() {
         const mustStream = streaming && !attachedFile;
         if (mustStream) {
           let gotFirst = false;
-          const assistantMsg = { role: "assistant", content: "" };
+          let assistantMsg = { role: "assistant", content: "" };
           // setHistory((prev) => [...prev, assistantMsg]);
 
           for await (const token of chatDirectStream({

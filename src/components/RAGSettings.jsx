@@ -1,6 +1,6 @@
 import React from "react";
 import { HelpCircle } from "lucide-react";
-import TooltipWrapper from "./ToolTipWrapper";
+import TooltipWrapper from "./TooltipWrapper";
 
 export default function RAGSettings({
   topK,
