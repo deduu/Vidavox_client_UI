@@ -54,19 +54,19 @@ export default function ChatPage() {
     listLLMs()
       .then((list) => {
         setAvailableModels(list);
-        const preferred = list.find((m) => m.id === "gemini-2.0-flash");
-        const fallback = list[0];
-        setModel((cur) =>
-          cur && list.some((m) => m.id === cur)
-            ? cur
-            : (preferred || fallback).id
-        );
+
+        const savedModel = localStorage.getItem("selectedModel");
+        const fallback =
+          list.find((m) => m.id === "gemini-2.0-flash") || list[0];
+
+        if (savedModel && list.some((m) => m.id === savedModel)) {
+          setModel(savedModel);
+        } else {
+          setModel(fallback.id);
+        }
       })
       .catch(console.error);
   }, []);
-  useEffect(() => {
-    console.log("📌 Model changed to:", model);
-  }, [model]);
 
   useEffect(() => {
     if (!currentChatId) return;
@@ -335,7 +335,11 @@ export default function ChatPage() {
                 <select
                   className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-w-32"
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setModel(value);
+                    localStorage.setItem("selectedModel", value);
+                  }}
                   disabled={!availableModels.length}
                 >
                   {availableModels.map(({ id, label }) => (
