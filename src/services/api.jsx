@@ -288,6 +288,7 @@ export async function sendChatMessage({
   topK,
   threshold,
   file,
+  session_id,
 }) {
   const form = new FormData();
   form.append("query", message);
@@ -295,6 +296,7 @@ export async function sendChatMessage({
   form.append("search_mode", "hybrid");
   form.append("top_k", topK);
   form.append("threshold", threshold);
+  form.append("session_id", session_id);
 
   // ✅ Append each prefix (fileId) individually
   for (const fileId of knowledgeBaseFileIds) {

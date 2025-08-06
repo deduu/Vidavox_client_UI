@@ -49,6 +49,7 @@ export default function ChatPage() {
 
   const scrollRef = useRef();
   const [attachedFile, setAttachedFile] = useState(null); // New state for attached file
+  const [typing, setTyping] = useState(false);
 
   useEffect(() => {
     listLLMs()
@@ -171,6 +172,7 @@ export default function ChatPage() {
           topK,
           threshold,
           file: attachedFile, // Optional
+          session_id: sessionId,
         });
 
         const assistantMsg = {
@@ -189,6 +191,7 @@ export default function ChatPage() {
 
         const mustStream = streaming && !attachedFile;
         if (mustStream) {
+          setTyping(true);
           let gotFirst = false;
           let assistantMsg = { role: "assistant", content: "" };
           // setHistory((prev) => [...prev, assistantMsg]);
@@ -207,6 +210,7 @@ export default function ChatPage() {
           })) {
             if (!gotFirst) {
               gotFirst = true;
+              setTyping(false);
               assistantMsg = { role: "assistant", content: token };
               setHistory((prev) => [...prev, assistantMsg]);
             } else {
@@ -536,7 +540,7 @@ export default function ChatPage() {
                   </p>
                 </div>
               )}
-              {sending && (
+              {typing && (
                 <div className="text-gray-500 italic flex items-center gap-2 justify-left py-4">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
