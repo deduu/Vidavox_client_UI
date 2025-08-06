@@ -11,6 +11,8 @@ import ChatPage from "./pages/ChatPage";
 import KnowledgeBaseManagerPage from "./pages/KnowledgeBaseManagerPage";
 import ProfileSettingsPage from "./pages/ProfileSettingsPage";
 import { ChatSessionProvider } from "./contexts/ChatSessionContext";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 function PrivateRoute({ children }) {
   const { user, loading } = React.useContext(AuthContext);
@@ -31,6 +33,8 @@ export default function App() {
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
 
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
         path="/dashboard"
         element={

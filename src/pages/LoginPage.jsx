@@ -39,7 +39,12 @@ export default function LoginPage() {
       )}
 
       <LoginForm />
-
+      {/* ✅ Add Forgot Password link here */}
+      <div className="text-right text-sm mt-2">
+        <Link to="/forgot-password" className="text-blue-600 hover:underline">
+          Forgot Password?
+        </Link>
+      </div>
       <p className="text-center text-sm text-gray-600 mt-4">
         Don’t have an account?{" "}
         <Link to="/register" className="text-blue-600 hover:underline">

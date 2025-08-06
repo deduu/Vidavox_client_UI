@@ -96,6 +96,27 @@ export async function resendVerification(body) {
   return data;
 }
 
+export async function sendPasswordReset(email) {
+  const res = await fetch(`${API_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok)
+    throw new Error((await res.json()).detail || "Failed to request reset");
+  return res.json();
+}
+
+export async function resetPassword({ token, new_password }) {
+  const res = await fetch(`${API_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password }),
+  });
+  if (!res.ok)
+    throw new Error((await res.json()).detail || "Failed to reset password");
+  return res.json();
+}
 export async function fetchCurrentUser() {
   const res = await fetch(`${API_URL}/auth/users/me`, {
     headers: authHeader(),
