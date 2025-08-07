@@ -51,6 +51,12 @@ export default function ChatPage() {
   const [attachedFile, setAttachedFile] = useState(null); // New state for attached file
   const [typing, setTyping] = useState(false);
 
+  // useEffect(() => {
+  //   if (missingApiKey) {
+  //     console.log("🔔 Show user-facing missing API key banner:", missingApiKey);
+  //   }
+  // }, [missingApiKey]);
+
   useEffect(() => {
     listLLMs()
       .then((list) => {
@@ -165,7 +171,7 @@ export default function ChatPage() {
           kb.files.map((f) => f.id)
         );
         console.log("🔍 Using KBs:", allFileIds);
-
+        setTyping(true);
         const res = await sendChatMessage({
           message,
           knowledgeBaseFileIds: allFileIds,
@@ -185,6 +191,7 @@ export default function ChatPage() {
         await maybeAutoRenameChat(userMsg);
         await sendChatMessageToBackend(assistantMsg);
         setHistory((prev) => [...prev, assistantMsg]);
+        setTyping(false);
       } else {
         // await sendChatMessageToBackend(userMsg);
         await maybeAutoRenameChat(userMsg);
@@ -257,19 +264,32 @@ export default function ChatPage() {
       const serverMsg = err?.response?.data?.detail;
       const msg = serverMsg || err?.message || String(err);
 
+      // Improved fallback logic
       const isMissingKey =
-        status === 401 ||
         status === 403 ||
+        status === 401 ||
         /missing\s*api\s*key/i.test(msg) ||
-        /api key.*missing/i.test(msg);
+        /api key.*missing/i.test(msg) ||
+        /unauthorized/i.test(msg);
 
       if (isMissingKey) {
-        console.warn("🚨 setting missingApiKey:", msg);
-        setMissingApiKey(msg);
+        console.warn("🚨 Detected missing API key error:", { status, msg });
+
+        setMissingApiKey(
+          msg.includes("API key")
+            ? msg
+            : "API key missing or invalid. Please update your key in profile settings."
+        );
+
+        setTyping(false); // 🔥 Must be called here too
       } else {
+        setTyping(false); // ✅ Always clear typing
         setHistory((prev) => [
           ...prev,
-          { role: "assistant", content: "⚠️ Something went wrong." },
+          {
+            role: "assistant",
+            content: "⚠️ Something went wrong. Please try again.",
+          },
         ]);
       }
     } finally {
@@ -491,24 +511,34 @@ export default function ChatPage() {
           <div className="max-w-4xl mx-auto px-4 py-6">
             {/* 👇 Add warning here */}
             {missingApiKey && (
-              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow">
-                <p className="font-medium">Missing API Key</p>
+              <div
+                // className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow animate-bounce"
+                className="animate-fade-in border-l-4 border-yellow-500 bg-yellow-100 text-yellow-700 p-4 mb-4 rounded shadow pulse-slow"
+                ref={(el) =>
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" })
+                }
+              >
+                <p className="font-bold text-lg">🚨 Missing API Key</p>
                 <p className="text-sm">{missingApiKey}</p>
                 <p className="mt-2 text-sm">
                   Please{" "}
-                  <a href="/profile" className="underline text-blue-600">
+                  <a
+                    href="/profile"
+                    className="underline text-blue-600 font-semibold"
+                  >
                     go to your profile
                   </a>{" "}
                   and add the API key to continue using this model.
                 </p>
                 <button
-                  className="mt-3 text-xs bg-yellow-500 text-white px-3 py-1 rounded"
+                  className="mt-3 text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded transition"
                   onClick={() => setMissingApiKey(null)}
                 >
                   Dismiss
                 </button>
               </div>
             )}
+
             <div className="space-y-6">
               {history.length ? (
                 history.map((msg, i) => (

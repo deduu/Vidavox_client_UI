@@ -1,5 +1,5 @@
-export const API_URL =
-  import.meta.env.BACKEND_URL || "http://localhost:8001/v1";
+export const API_URL = "http://34.56.114.241/v1";
+// import.meta.env.BACKEND_URL || "http://34.56.114.241:8001/v1";
 
 function authHeader() {
   const token = localStorage.getItem("token");
@@ -49,6 +49,7 @@ export async function checkEmail(email) {
 }
 
 export async function checkUsername(username) {
+  console.log("Backend URL:", import.meta.env.VITE_BACKEND_URL);
   const res = await fetch(
     `${API_URL}/auth/check/username?username=${encodeURIComponent(username)}`
   );

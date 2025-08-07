@@ -24,6 +24,14 @@ export default function LoginPage() {
 
   return (
     <AuthLayout>
+      {/* Logo */}
+      <div className="flex justify-center mb-6">
+        <img
+          src="/vidavox_white.png"
+          alt="Company Logo"
+          className="max-h-25 w-auto"
+        />
+      </div>
       <h1 className="text-2xl font-bold text-center mb-6">Welcome Back</h1>
 
       {verifiedMsg && (
