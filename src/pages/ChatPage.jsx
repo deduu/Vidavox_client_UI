@@ -23,7 +23,7 @@ export default function ChatPage() {
   const [kbs, setKbs] = useState([]);
   const [selectedKbs, setSelectedKbs] = useState([]);
 
-  const [model, setModel] = useState("gemini 2.0 Flash");
+  const [model, setModel] = useState("meta-llama/Llama-3.1-8B-Instruct");
   const [missingApiKey, setMissingApiKey] = useState(null); // null or a string
 
   const [streaming, setStreaming] = useState(true);
