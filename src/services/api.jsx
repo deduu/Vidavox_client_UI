@@ -1,4 +1,6 @@
-export const API_URL = import.meta.env.BACKEND_URL || "http://localhost:8005/v1";
+
+export const API_URL = "http://35.186.159.2/v1";
+// import.meta.env.BACKEND_URL || "http://34.56.114.241:8001/v1";
 
 function authHeader() {
   const token = localStorage.getItem("token");
