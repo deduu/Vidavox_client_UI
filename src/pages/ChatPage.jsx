@@ -28,7 +28,7 @@ export default function ChatPage() {
   const [missingApiKey, setMissingApiKey] = useState(null); // null or a string
 
   const [streaming, setStreaming] = useState(true);
-  const [maxTokens, setMaxTokens] = useState(1024);
+  const [maxTokens, setMaxTokens] = useState(256);
   const [temperature, setTemperature] = useState(0.8);
 
   const [topK, setTopK] = useState(10);
@@ -485,7 +485,6 @@ export default function ChatPage() {
       logChatDebug("error", {
         status,
         serverMsg,
-        raw,
         model,
         imageUrls,
         fileUrls,

@@ -407,9 +407,21 @@ export async function chatDirect({
   // Legacy fallback (still supported): raw File
   file,
 }) {
+  // --- Client-side validation to avoid sending bad payloads ---
+  if (
+    !Array.isArray(messages) ||
+    messages.length === 0 ||
+    !messages.every((m) => m && typeof m.role === "string" && "content" in m)
+  ) {
+    throw new Error("Invalid 'messages' payload (client-side check)");
+  }
   const fd = new FormData();
   fd.append("model", model);
-  fd.append("messages", JSON.stringify(messages));
+  fd.append(
+    "messages",
+    JSON.stringify(Array.isArray(messages) ? messages : [])
+  );
+
   fd.append("max_tokens", String(max_tokens));
   fd.append("temperature", String(temperature));
   fd.append("stream", "false");
