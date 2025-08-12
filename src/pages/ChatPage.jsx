@@ -11,6 +11,7 @@ import {
   chatDirect,
   chatDirectStream,
   listLLMs,
+  uploadAttachment,
 } from "../services/api";
 import { X, ChevronDown, ChevronUp, Settings, FileText } from "lucide-react"; // Import FileText
 
@@ -48,14 +49,35 @@ export default function ChatPage() {
   const activeChat = chats.find((c) => c.id === currentChatId);
 
   const scrollRef = useRef();
-  const [attachedFile, setAttachedFile] = useState(null); // New state for attached file
+  const [attachments, setAttachments] = useState([]); // [{ id, file, meta, progress, uploading, error }]
   const [typing, setTyping] = useState(false);
+  const [pendingId, setPendingId] = useState(null); // for placeholder bubbles
 
-  // useEffect(() => {
-  //   if (missingApiKey) {
-  //     console.log("🔔 Show user-facing missing API key banner:", missingApiKey);
-  //   }
-  // }, [missingApiKey]);
+  const ac = new AbortController();
+  const { signal } = ac;
+
+  const logChatDebug = (stage, payload) => {
+    try {
+      // keep the last payload/response on window for easy inspection
+      window.__lastChatDirect = window.__lastChatDirect || {};
+      window.__lastChatDirect[stage] = payload;
+
+      const label = `🛰 chatDirect ${stage}`;
+      // collapse noisy blobs but keep them accessible
+      console.groupCollapsed(label);
+      console.log(payload);
+      console.groupEnd(label);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (selectedKbs?.length) {
+      persistKBs(selectedKbs);
+    } else {
+      // if cleared, also clear storage so new chats start empty
+      localStorage.removeItem(KB_STORAGE_KEY);
+    }
+  }, [selectedKbs]);
 
   useEffect(() => {
     listLLMs()
@@ -82,19 +104,69 @@ export default function ChatPage() {
       setHistory(msgs);
     })();
   }, [currentChatId, messagesMap]);
-
   useEffect(() => {
     listKnowledgeBases()
-      .then(setKbs)
+      .then((all) => {
+        setKbs(all);
+
+        // If not a brand-new chat, hydrate selection from storage
+        const isNewChat = activeChat?.title === "New Chat";
+        if (!isNewChat) {
+          const ids = loadPersistedKBs();
+          if (ids.length) {
+            setSelectedKbs(reconcileKBs(ids, all));
+          }
+        } else {
+          // brand-new chat: make sure KBs start empty
+          setSelectedKbs([]);
+        }
+      })
       .catch((err) => console.error("❌ Failed to load KBs:", err));
-  }, []);
+    // include activeChat so this re-evaluates on chat change
+  }, [activeChat?.id]);
+
+  useEffect(() => {
+    if (activeChat?.title === "New Chat") {
+      setSelectedKbs([]);
+      localStorage.removeItem(KB_STORAGE_KEY);
+    }
+  }, [activeChat?.title]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [history.length]);
 
+  // ---- KB persistence helpers ----
+  const KB_STORAGE_KEY = "selectedKbs.v1";
+
+  // Only store minimal info to avoid staleness
+  const persistKBs = (kbs) => {
+    try {
+      const compact = kbs.map((k) => ({ id: k.id }));
+      localStorage.setItem(KB_STORAGE_KEY, JSON.stringify(compact));
+    } catch {}
+  };
+
+  const loadPersistedKBs = () => {
+    try {
+      const raw = localStorage.getItem(KB_STORAGE_KEY);
+      if (!raw) return [];
+      const ids = JSON.parse(raw).map((x) => x.id);
+      return Array.isArray(ids) ? ids : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Map persisted IDs back to current KB objects (ignore missing/removed KBs)
+  const reconcileKBs = (ids, allKbs) => {
+    const byId = new Map(allKbs.map((k) => [k.id, k]));
+    return ids.map((id) => byId.get(id)).filter(Boolean);
+  };
+
   const sendChatMessageToBackend = async (msg) => {
     console.log("🔸 to‑Backend (frontend):", msg); // <‑‑ add
+    const payload = withLegacyFileFields(msg);
     const {
       role,
       content,
@@ -104,7 +176,7 @@ export default function ChatPage() {
       file_url,
       file_name,
       file_type,
-    } = msg; // Include file
+    } = payload; // Include file
     await sendMessageToCurrentChat({
       role,
       content,
@@ -131,6 +203,32 @@ export default function ChatPage() {
     }
   };
 
+  // Prefer the first image; otherwise the first attachment
+  const pickPrimaryAttachment = (atts) => {
+    if (!Array.isArray(atts) || !atts.length) return null;
+    return atts.find((a) => (a.type || "").startsWith("image/")) || atts[0];
+  };
+
+  const withLegacyFileFields = (msg) => {
+    const att = pickPrimaryAttachment(msg.attachments);
+    if (!att) return { ...msg };
+
+    return {
+      ...msg,
+      // keep the rich attachments array for the new UI
+      attachments: msg.attachments,
+
+      // legacy fields for older backend/UI
+      file:
+        att.name || att.type
+          ? { name: att.name || "file", type: att.type || "" }
+          : null,
+      file_url: att.display_url || att.url || null, // blob:… for instant preview, server URL as fallback
+      file_name: att.name || null,
+      file_type: att.type || null,
+    };
+  };
+
   const fileToDataUrl = (file) =>
     new Promise((res) => {
       const fr = new FileReader();
@@ -138,34 +236,152 @@ export default function ChatPage() {
       fr.readAsDataURL(file);
     });
 
-  const handleSend = async () => {
-    if (!message.trim() && !attachedFile) return; // Allow sending with only a file
+  const addFilesAndUpload = async (files) => {
+    const list = Array.from(files);
+    // create placeholder rows
+    const placeholders = list.map((f) => ({
+      id: crypto.randomUUID(),
+      file: f,
+      meta: null,
+      progress: 0,
+      uploading: true,
+      error: null,
+      displayUrl: URL.createObjectURL(f), // ✅ for UI preview
+    }));
+    setAttachments((prev) => [...prev, ...placeholders]);
+
+    // upload each file
+    for (const ph of placeholders) {
+      try {
+        const meta = await uploadAttachment(ph.file, (p) => {
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === ph.id ? { ...a, progress: p } : a))
+          );
+        });
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === ph.id ? { ...a, meta, uploading: false, progress: 100 } : a
+          )
+        );
+      } catch (err) {
+        console.error("Upload failed:", err);
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === ph.id
+              ? {
+                  ...a,
+                  uploading: false,
+                  error: err.message || "Upload failed",
+                }
+              : a
+          )
+        );
+      }
+    }
+  };
+
+  const handleSendFileOnly = async (file) => {
+    // find the (now) uploaded meta for this file name
+    const uploaded = attachments.find(
+      (a) =>
+        a.file?.name === file.name && a.meta?.url && !a.uploading && !a.error
+    );
+    if (!uploaded) return;
+
     const sessionId = currentChatId || "default";
-    const previewUrl = attachedFile ? await fileToDataUrl(attachedFile) : null;
-    console.log("📥 previewUrl:", previewUrl);
+    const userMsg = {
+      role: "user",
+      content: "",
+      attachments: [
+        {
+          name: file.name,
+          type: file.type,
+          url: uploaded.meta.url,
+          // no object URL here; it's fine, ChatMessage will use `url`
+        },
+      ],
+    };
+
+    setHistory((prev) => [...prev, userMsg]);
+    await sendChatMessageToBackend(userMsg);
+    await maybeAutoRenameChat(userMsg);
+
+    setSending(true);
+    setTyping(true);
+
+    try {
+      const reply = await chatDirect({
+        model,
+        messages: [{ role: "user", content: "(sent an attachment)" }],
+        max_tokens: maxTokens,
+        temperature,
+        attached_image_urls:
+          uploaded.meta.type === "image" ? [uploaded.meta.url] : [],
+        attached_file_urls:
+          uploaded.meta.type !== "image" ? [uploaded.meta.url] : [],
+        session_id: sessionId,
+      });
+      const text = reply.text ?? "";
+
+      await sendChatMessageToBackend({ role: "assistant", content: text });
+      setHistory((prev) => [...prev, { role: "assistant", content: text }]);
+    } catch (err) {
+      console.error("sendFileOnly error:", err);
+      setHistory((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "⚠️ Something went wrong. Please try again.",
+        },
+      ]);
+    } finally {
+      setTyping(false);
+      setSending(false);
+      setAttachments((prev) => {
+        prev.forEach((a) => a.displayUrl && URL.revokeObjectURL(a.displayUrl));
+        return [];
+      });
+    }
+  };
+
+  const handleSend = async () => {
+    // const hasAttachment = !!attachedMeta || !!attachedFile;
+
+    const uploaded = attachments.filter((a) => a.meta?.url && !a.uploading);
+    const hasAttachment = uploaded.length > 0;
+
+    if (!message.trim() && !hasAttachment) return;
+
+    const sessionId = currentChatId || "default";
+    const imageUrls = uploaded
+      .filter((a) => a.meta?.type === "image")
+      .map((a) => a.meta.url);
+    const fileUrls = uploaded
+      .filter((a) => a.meta?.type !== "image")
+      .map((a) => a.meta.url);
+    const isVision = imageUrls.length > 0; // if any image
     const userMsg = {
       role: "user",
       content: message,
-      file: attachedFile
-        ? { name: attachedFile.name, type: attachedFile.type }
-        : null,
-      file_url: previewUrl, // now a data‑URL, not blob
+      // file_url: imageUrls[0] || fileUrls[0] || null,
+      attachments: uploaded.map((a) => ({
+        name: a.file?.name,
+        type: a.file?.type,
+        url: a.meta?.url,
+        display_url: a.displayUrl,
+      })),
     };
+    console.log("userMsg being appended:", userMsg);
+
     await sendChatMessageToBackend(userMsg); // backend stores data‑URL
     // Store file info
     const baseHistory = [...history, userMsg];
     setHistory(baseHistory);
     setMessage("");
-    setAttachedFile(null); // Clear attached file after sending
+
     setSending(true);
 
     try {
-      // Revoke preview URL later to prevent memory leak
-      if (previewUrl) {
-        setTimeout(() => {
-          URL.revokeObjectURL(previewUrl);
-        }, 10000); // 10 seconds is safe for display
-      }
       if (selectedKbs.length > 0) {
         const allFileIds = selectedKbs.flatMap((kb) =>
           kb.files.map((f) => f.id)
@@ -196,25 +412,28 @@ export default function ChatPage() {
         // await sendChatMessageToBackend(userMsg);
         await maybeAutoRenameChat(userMsg);
 
-        const mustStream = streaming && !attachedFile;
+        // const mustStream = streaming && !attachedFile;
+        const mustStream = streaming && !isVision; // vision => force non-stream
+
         if (mustStream) {
           setTyping(true);
           let gotFirst = false;
           let assistantMsg = { role: "assistant", content: "" };
-          // setHistory((prev) => [...prev, assistantMsg]);
 
-          for await (const token of chatDirectStream({
+          const payload = {
             model,
-            // messages: baseHistory.map((msg) => ({
-            //   role: msg.role,
-            //   content: msg.content,
-            // })),
-            messages: [{ role: "user", content: message }], // Send only text content to LLM
+            messages: [{ role: "user", content: message }],
             max_tokens: maxTokens,
             temperature,
-            file: attachedFile, // Optional
+            attached_image_urls: imageUrls,
+            attached_file_urls: fileUrls,
             session_id: sessionId,
-          })) {
+          };
+          logChatDebug("request(stream)", payload);
+
+          // setHistory((prev) => [...prev, assistantMsg]);
+
+          for await (const token of chatDirectStream(payload)) {
             if (!gotFirst) {
               gotFirst = true;
               setTyping(false);
@@ -236,18 +455,18 @@ export default function ChatPage() {
 
           await sendChatMessageToBackend(assistantMsg);
         } else {
-          const reply = await chatDirect({
+          const payload = {
             model,
-            // messages: baseHistory.map((msg) => ({
-            //   role: msg.role,
-            //   content: msg.content,
-            // })),
-            messages: [{ role: "user", content: message }], // Send only text content to LLM
+            messages: [{ role: "user", content: message }],
             max_tokens: maxTokens,
             temperature,
-            file: attachedFile, // Optional
+            attached_image_urls: imageUrls,
+            attached_file_urls: fileUrls,
             session_id: sessionId,
-          });
+          };
+          logChatDebug("request", payload);
+          const reply = await chatDirect(payload);
+          logChatDebug("response", reply);
           const assistantMsg = {
             role: "assistant",
             content: reply.text,
@@ -263,7 +482,14 @@ export default function ChatPage() {
       const status = err?.response?.status;
       const serverMsg = err?.response?.data?.detail;
       const msg = serverMsg || err?.message || String(err);
-
+      logChatDebug("error", {
+        status,
+        serverMsg,
+        raw,
+        model,
+        imageUrls,
+        fileUrls,
+      });
       // Improved fallback logic
       const isMissingKey =
         status === 403 ||
@@ -294,15 +520,31 @@ export default function ChatPage() {
       }
     } finally {
       setSending(false);
+      // setAttachedFile(null);
+      // setAttachedMeta(null);
+      // setUploading(false);
+      // setUploadProgress(0);
+      setAttachments([]);
     }
   };
 
-  const handleAttachFile = (file) => {
-    setAttachedFile(file);
+  const handlePasteImage = async (file) => {
+    // forward a single pasted image into the same uploader pipeline
+    await addFilesAndUpload([file]);
   };
 
-  const handleRemoveAttachedFile = () => {
-    setAttachedFile(null);
+  const handleAttachFiles = async (files) => {
+    if (!files || files.length === 0) return;
+
+    await addFilesAndUpload(files);
+  };
+
+  const handleRemoveAttachment = (id) => {
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target?.displayUrl) URL.revokeObjectURL(target.displayUrl);
+      return prev.filter((a) => a.id !== id);
+    });
   };
 
   const hasKnowledgeBases = selectedKbs.length > 0;
@@ -594,9 +836,14 @@ export default function ChatPage() {
                 setMessage={setMessage}
                 onSend={handleSend}
                 disabled={sending}
-                onAttachFile={handleAttachFile} // Pass the handler
-                attachedFile={attachedFile} // Pass the attached file state
-                onRemoveAttachedFile={handleRemoveAttachedFile} // Pass the removal handler
+                onAttachFiles={handleAttachFiles} // Pass the handler
+                attachments={attachments} // Pass the attached file state
+                onRemoveAttachment={handleRemoveAttachment} // Pass the removal handler
+                onSendFileOnly={handleSendFileOnly}
+                onPasteImage={handlePasteImage}
+                autoSendOnAttach
+                // uploading={uploading}
+                // uploadProgress={uploadProgress}
               />
             </div>
           </div>

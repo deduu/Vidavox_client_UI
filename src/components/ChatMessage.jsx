@@ -168,6 +168,40 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
             isUser ? "bg-blue-100 text-right" : "bg-gray-100"
           }`}
         >
+          {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {msg.attachments.map((att, i) => {
+                const isImage = (att.type || "").startsWith("image/");
+                const src = att.display_url || att.url; // prefer object URL for instant preview
+                return (
+                  <div key={i} className="border rounded-md p-1 max-w-[200px]">
+                    {isImage ? (
+                      <img
+                        src={src}
+                        alt={att.name || "image"}
+                        className="max-h-40 rounded"
+                        onError={(e) => {
+                          if (att.url && e.currentTarget.src !== att.url) {
+                            e.currentTarget.src = att.url; // fallback to server URL
+                          }
+                        }}
+                      />
+                    ) : (
+                      <a
+                        className="text-blue-600 underline break-all"
+                        href={att.url || att.display_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {att.name || "file"}
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {msg.file && (
             <div
               className={`mb-3 flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${

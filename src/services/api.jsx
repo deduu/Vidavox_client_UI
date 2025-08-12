@@ -1,10 +1,26 @@
-
-export const API_URL = "http://35.186.159.2/v1";
+export const API_URL = "http://localhost:8005/v1";
 // import.meta.env.BACKEND_URL || "http://34.56.114.241:8001/v1";
 
 function authHeader() {
   const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+// --- helpers ---
+// Append an array as repeated form fields: key[]=a & key[]=b
+function appendList(fd, key, arr) {
+  if (!arr || !arr.length) return;
+  for (const v of arr) fd.append(key, v);
+}
+
+// Compact debug logger
+function logChat(stage, payload) {
+  try {
+    window.__lastChatDirect = window.__lastChatDirect || {};
+    window.__lastChatDirect[stage] = payload;
+    console.groupCollapsed(`🛰 chatDirect ${stage}`);
+    console.log(payload);
+    console.groupEnd();
+  } catch {}
 }
 
 export async function register(user) {
@@ -182,6 +198,44 @@ export async function deleteFile(id) {
 }
 
 // services/api.js
+export async function uploadAttachment(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    xhr.open("POST", `${API_URL}/folders/upload`, true); // <-- Adjust backend path
+    xhr.setRequestHeader(
+      "Authorization",
+      `Bearer ${localStorage.getItem("token") || ""}`
+    );
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && typeof onProgress === "function") {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        onProgress(percent);
+      }
+    };
+
+    xhr.onload = () => {
+      try {
+        const res = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(res); // { url, type, filename, ... }
+        } else {
+          reject(new Error(res.detail || "Upload failed"));
+        }
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.send(formData);
+  });
+}
+
+// services/api.js
 export async function uploadFiles(files, folderId) {
   const form = new FormData();
   Array.from(files).forEach((file) => form.append("files", file));
@@ -339,105 +393,173 @@ export async function sendChat({ question, folder_ids, file_ids }) {
   return data; // { answer: string }
 }
 
-// non-streaming chat
+// --- non-streaming chat ---
+// services/api.js
 export async function chatDirect({
   model,
-  messages,
-  max_tokens = 512,
+  messages, // [{ role, content }]
+  max_tokens = 2048,
   temperature = 0.8,
-  file,
   session_id,
+  // NEW preferred: arrays of pre-uploaded URLs
+  attached_image_urls = [], // e.g., ["https://cdn/.../img1.png", "https://.../img2.jpg"]
+  attached_file_urls = [], // non-image attachments
+  // Legacy fallback (still supported): raw File
+  file,
 }) {
-  const formData = new FormData();
-  formData.append("model", model);
-  formData.append("messages", JSON.stringify(messages));
-  formData.append("max_tokens", max_tokens);
-  formData.append("temperature", temperature);
-  formData.append("stream", "false");
-  formData.append("session_id", session_id);
+  const fd = new FormData();
+  fd.append("model", model);
+  fd.append("messages", JSON.stringify(messages));
+  fd.append("max_tokens", String(max_tokens));
+  fd.append("temperature", String(temperature));
+  fd.append("stream", "false");
+  fd.append("session_id", session_id || "default");
 
+  // arrays → repeated form keys (FastAPI: List[str] = Form([]))
+  appendList(fd, "attached_image_urls", attached_image_urls);
+  appendList(fd, "attached_file_urls", attached_file_urls);
+
+  // legacy single-file path — keep for backward-compat
   if (file) {
-    if (file.type.startsWith("image/")) {
-      formData.append("attached_image", file);
+    if (file.type?.startsWith?.("image/")) {
+      fd.append("attached_image", file);
     } else {
-      formData.append("attached_file", file);
+      fd.append("attached_file", file);
     }
   }
 
-  const res = await fetch(`${API_URL}/chat/chat-direct`, {
+  const requestInit = {
     method: "POST",
-    headers: {
-      ...authHeader(), // ✅ Do NOT set "Content-Type"
+    headers: { ...authHeader() }, // don't set Content-Type for FormData
+    body: fd,
+  };
+
+  logChat("request(non-stream)", {
+    url: `${API_URL}/chat/chat-direct`,
+    payloadPreview: {
+      model,
+      session_id,
+      max_tokens,
+      temperature,
+      imagesN: attached_image_urls?.length || 0,
+      filesN: attached_file_urls?.length || 0,
+      hasLegacyFile: !!file,
+      // preview first 2 urls to avoid console spam
+      imageUrls: attached_image_urls?.slice?.(0, 2),
+      fileUrls: attached_file_urls?.slice?.(0, 2),
     },
-    body: formData,
   });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "chat-direct failed");
+  const res = await fetch(`${API_URL}/chat/chat-direct`, requestInit);
+  const text = await res.text();
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    logChat("response-raw(non-stream)", text);
+    throw new Error(`chat-direct failed: non-JSON response (${res.status})`);
+  }
+
+  logChat("response(non-stream)", { status: res.status, data });
+
+  if (!res.ok) throw new Error(data?.detail || "chat-direct failed");
   return data;
 }
 
-// streaming chat (async-iterator of tokens)
+// --- streaming chat (async iterator) ---
+// services/api.js
 export async function* chatDirectStream({
   model,
   messages,
-  max_tokens = 512,
+  max_tokens = 2048,
   temperature = 0.8,
-  file,
   session_id,
+  attached_image_urls = [],
+  attached_file_urls = [],
+  file, // legacy fallback
 }) {
-  const formData = new FormData();
-  formData.append("model", model);
-  formData.append("messages", JSON.stringify(messages));
-  formData.append("max_tokens", max_tokens);
-  formData.append("temperature", temperature);
-  formData.append("stream", "true");
-  formData.append("session_id", session_id);
+  const fd = new FormData();
+  fd.append("model", model);
+  fd.append("messages", JSON.stringify(messages));
+  fd.append("max_tokens", String(max_tokens));
+  fd.append("temperature", String(temperature));
+  fd.append("stream", "true");
+  fd.append("session_id", session_id || "default");
+
+  appendList(fd, "attached_image_urls", attached_image_urls);
+  appendList(fd, "attached_file_urls", attached_file_urls);
 
   if (file) {
-    if (file.type.startsWith("image/")) {
-      formData.append("attached_image", file);
+    if (file.type?.startsWith?.("image/")) {
+      fd.append("attached_image", file);
     } else {
-      formData.append("attached_file", file);
+      fd.append("attached_file", file);
     }
   }
 
-  const res = await fetch(`${API_URL}/chat/chat-direct`, {
+  const requestInit = {
     method: "POST",
-    headers: {
-      ...authHeader(), // ✅ No Content-Type here
+    headers: { ...authHeader() },
+    body: fd,
+  };
+
+  logChat("request(stream)", {
+    url: `${API_URL}/chat/chat-direct`,
+    payloadPreview: {
+      model,
+      session_id,
+      max_tokens,
+      temperature,
+      imagesN: attached_image_urls?.length || 0,
+      filesN: attached_file_urls?.length || 0,
+      hasLegacyFile: !!file,
+      imageUrls: attached_image_urls?.slice?.(0, 2),
+      fileUrls: attached_file_urls?.slice?.(0, 2),
     },
-    body: formData,
   });
 
+  const res = await fetch(`${API_URL}/chat/chat-direct`, requestInit);
+
   if (!res.ok) {
-    const err = await res.json();
+    const errText = await res.text().catch(() => "");
+    let err;
+    try {
+      err = JSON.parse(errText);
+    } catch {
+      err = { detail: errText || res.statusText };
+    }
+    logChat("response(stream:error)", { status: res.status, err });
     throw new Error(err.detail || "chat-direct stream failed");
   }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buf = "";
+
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
-    buf += decoder.decode(value, { stream: true });
 
+    buf += decoder.decode(value, { stream: true });
     const parts = buf.split("\n\n");
-    buf = parts.pop();
+    buf = parts.pop() || "";
 
     for (const chunk of parts) {
-      if (chunk.startsWith("data:")) {
-        const jsonStr = chunk.replace(/^data:\s*/, "");
-        try {
-          const { text } = JSON.parse(jsonStr);
+      if (!chunk.startsWith("data:")) continue;
+      const jsonStr = chunk.replace(/^data:\s*/, "");
+      try {
+        const { text } = JSON.parse(jsonStr);
+        if (typeof text === "string") {
           yield text;
-        } catch {
-          // Ignore malformed events
         }
+      } catch (e) {
+        // noisy SSE chunk—ignore
       }
     }
   }
+
+  logChat("response(stream:last)", { ended: true });
 }
 
 // Create chat session
