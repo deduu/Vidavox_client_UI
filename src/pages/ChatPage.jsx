@@ -229,6 +229,9 @@ export default function ChatPage() {
     };
   };
 
+  const isImageType = (t) =>
+    typeof t === "string" && t.toLowerCase().startsWith("image");
+
   const fileToDataUrl = (file) =>
     new Promise((res) => {
       const fr = new FileReader();
@@ -354,7 +357,7 @@ export default function ChatPage() {
 
     const sessionId = currentChatId || "default";
     const imageUrls = uploaded
-      .filter((a) => a.meta?.type === "image")
+      .filter((a) => isImageType(a.meta?.mime || a.meta?.type || a.file?.type))
       .map((a) => a.meta.url);
     const fileUrls = uploaded
       .filter((a) => a.meta?.type !== "image")
@@ -363,14 +366,29 @@ export default function ChatPage() {
     const userMsg = {
       role: "user",
       content: message,
-      // file_url: imageUrls[0] || fileUrls[0] || null,
       attachments: uploaded.map((a) => ({
-        name: a.file?.name,
-        type: a.file?.type,
-        url: a.meta?.url,
-        display_url: a.displayUrl,
+        name: a.file?.name || a.meta?.filename || "file",
+        // Prefer a real MIME (image/jpeg). Fallback to file.type. If backend sent "image", coerce to "image/*".
+        type:
+          a.meta?.mime ||
+          (a.meta?.type && a.meta.type.includes("/") ? a.meta.type : null) ||
+          a.file?.type ||
+          (a.meta?.type === "image" ? "image/*" : "application/octet-stream"),
+        url: a.meta?.url, // ✅ server URL
+        display_url: a.meta?.url, // ✅ also server URL (no blob:)
       })),
     };
+    // const userMsg = {
+    //   role: "user",
+    //   content: message,
+    //   // file_url: imageUrls[0] || fileUrls[0] || null,
+    //   attachments: uploaded.map((a) => ({
+    //     name: a.file?.name,
+    //     type: a.file?.type,
+    //     url: a.meta?.url,
+    //     display_url: a.displayUrl,
+    //   })),
+    // };
     console.log("userMsg being appended:", userMsg);
 
     await sendChatMessageToBackend(userMsg); // backend stores data‑URL
@@ -379,6 +397,10 @@ export default function ChatPage() {
     setHistory(baseHistory);
     setMessage("");
 
+    setAttachments((prev) => {
+      prev.forEach((a) => a.displayUrl && URL.revokeObjectURL(a.displayUrl));
+      return [];
+    });
     setSending(true);
 
     try {
@@ -519,11 +541,6 @@ export default function ChatPage() {
       }
     } finally {
       setSending(false);
-      // setAttachedFile(null);
-      // setAttachedMeta(null);
-      // setUploading(false);
-      // setUploadProgress(0);
-      setAttachments([]);
     }
   };
 
