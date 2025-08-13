@@ -93,6 +93,7 @@ export function ChatSessionProvider({ children }) {
     file_url,
     file_name,
     file_type,
+    attachments,
   }) => {
     console.log("🔸 addChatMessage payload:", {
       role,
@@ -100,6 +101,7 @@ export function ChatSessionProvider({ children }) {
       file_url,
       file_name,
       file_type,
+      attachments,
     });
     if (!currentChatId) return;
 
@@ -111,6 +113,7 @@ export function ChatSessionProvider({ children }) {
       file_url,
       file_name,
       file_type,
+      attachments,
     });
 
     // Update messages map cache

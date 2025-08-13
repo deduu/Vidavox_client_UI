@@ -176,6 +176,7 @@ export default function ChatPage() {
       file_url,
       file_name,
       file_type,
+      attachments,
     } = payload; // Include file
     await sendMessageToCurrentChat({
       role,
@@ -186,8 +187,8 @@ export default function ChatPage() {
       file_url,
       file_name,
       file_type,
+      attachments,
     });
-    // await sendMessageToCurrentChat({ role, content, citations, chunks, file });
   };
 
   const maybeAutoRenameChat = async (msg) => {
@@ -206,26 +207,29 @@ export default function ChatPage() {
   // Prefer the first image; otherwise the first attachment
   const pickPrimaryAttachment = (atts) => {
     if (!Array.isArray(atts) || !atts.length) return null;
-    return atts.find((a) => (a.type || "").startsWith("image/")) || atts[0];
+    const isImg = (a) =>
+      typeof (a?.mime_type || a?.type) === "string" &&
+      (a.mime_type || a.type).toLowerCase().startsWith("image/");
+    return atts.find(isImg) || atts[0];
   };
 
   const withLegacyFileFields = (msg) => {
     const att = pickPrimaryAttachment(msg.attachments);
     if (!att) return { ...msg };
 
+    const legacyType = att.mime_type || att.type || "";
+    const preview = att.meta?.display_url || att.display_url || att.url || null;
+
     return {
       ...msg,
-      // keep the rich attachments array for the new UI
       attachments: msg.attachments,
-
-      // legacy fields for older backend/UI
       file:
-        att.name || att.type
-          ? { name: att.name || "file", type: att.type || "" }
+        att.name || legacyType
+          ? { name: att.name || "file", type: legacyType }
           : null,
-      file_url: att.display_url || att.url || null, // blob:… for instant preview, server URL as fallback
+      file_url: preview, // blob: (for instant UI) or server URL
       file_name: att.name || null,
-      file_type: att.type || null,
+      file_type: legacyType || null,
     };
   };
 
@@ -298,9 +302,10 @@ export default function ChatPage() {
       attachments: [
         {
           name: file.name,
-          type: file.type,
+          mime_type: file.type, // ✅ backend expects mime_type
           url: uploaded.meta.url,
-          // no object URL here; it's fine, ChatMessage will use `url`
+          size_bytes: file.size ?? null,
+          meta: {},
         },
       ],
     };
@@ -340,8 +345,21 @@ export default function ChatPage() {
     } finally {
       setTyping(false);
       setSending(false);
+      // in ChatPage.jsx where you clear the composer chips
       setAttachments((prev) => {
-        prev.forEach((a) => a.displayUrl && URL.revokeObjectURL(a.displayUrl));
+        prev.forEach((a) => {
+          if (a.displayUrl?.startsWith("blob:")) {
+            +console.log("🧹 revoking composer blob preview", a.displayUrl, {
+              name: a.file?.name,
+            });
+            URL.revokeObjectURL(a.displayUrl);
+          } else if (a.displayUrl) {
+            +console.warn(
+              "⚠️ displayUrl is not a blob, not revoking",
+              a.displayUrl
+            );
+          }
+        });
         return [];
       });
     }
@@ -366,30 +384,22 @@ export default function ChatPage() {
     const userMsg = {
       role: "user",
       content: message,
+      // file_url: imageUrls[0] || fileUrls[0] || null,
       attachments: uploaded.map((a) => ({
-        name: a.file?.name || a.meta?.filename || "file",
-        // Prefer a real MIME (image/jpeg). Fallback to file.type. If backend sent "image", coerce to "image/*".
-        type:
-          a.meta?.mime ||
-          (a.meta?.type && a.meta.type.includes("/") ? a.meta.type : null) ||
-          a.file?.type ||
-          (a.meta?.type === "image" ? "image/*" : "application/octet-stream"),
-        url: a.meta?.url, // ✅ server URL
-        display_url: a.meta?.url, // ✅ also server URL (no blob:)
+        name: a.file?.name,
+        mime_type: a.file?.type, // backend expects this
+        url: a.meta?.url,
+        size_bytes: a.file?.size || null,
+        meta: { display_url: a.displayUrl }, // put extra in meta dict
       })),
+
+      // attachments: uploaded.map((a) => ({
+      //   name: a.file?.name,
+      //   type: a.file?.type,
+      //   url: a.meta?.url,
+      //   display_url: a.displayUrl,
+      // })),
     };
-    // const userMsg = {
-    //   role: "user",
-    //   content: message,
-    //   // file_url: imageUrls[0] || fileUrls[0] || null,
-    //   attachments: uploaded.map((a) => ({
-    //     name: a.file?.name,
-    //     type: a.file?.type,
-    //     url: a.meta?.url,
-    //     display_url: a.displayUrl,
-    //   })),
-    // };
-    console.log("userMsg being appended:", userMsg);
 
     await sendChatMessageToBackend(userMsg); // backend stores data‑URL
     // Store file info
@@ -397,10 +407,24 @@ export default function ChatPage() {
     setHistory(baseHistory);
     setMessage("");
 
+    // in ChatPage.jsx where you clear the composer chips
     setAttachments((prev) => {
-      prev.forEach((a) => a.displayUrl && URL.revokeObjectURL(a.displayUrl));
+      prev.forEach((a) => {
+        if (a.displayUrl?.startsWith("blob:")) {
+          console.log("🧹 revoking composer blob preview", a.displayUrl, {
+            name: a.file?.name,
+          });
+          // URL.revokeObjectURL(a.displayUrl);
+        } else if (a.displayUrl) {
+          console.warn(
+            "⚠️ displayUrl is not a blob, not revoking",
+            a.displayUrl
+          );
+        }
+      });
       return [];
     });
+
     setSending(true);
 
     try {
@@ -451,7 +475,7 @@ export default function ChatPage() {
             attached_file_urls: fileUrls,
             session_id: sessionId,
           };
-          logChatDebug("request(stream)", payload);
+          // logChatDebug("request(stream)", payload);
 
           // setHistory((prev) => [...prev, assistantMsg]);
 
@@ -486,9 +510,9 @@ export default function ChatPage() {
             attached_file_urls: fileUrls,
             session_id: sessionId,
           };
-          logChatDebug("request", payload);
+          // logChatDebug("request", payload);
           const reply = await chatDirect(payload);
-          logChatDebug("response", reply);
+          // logChatDebug("response", reply);
           const assistantMsg = {
             role: "assistant",
             content: reply.text,
@@ -504,13 +528,13 @@ export default function ChatPage() {
       const status = err?.response?.status;
       const serverMsg = err?.response?.data?.detail;
       const msg = serverMsg || err?.message || String(err);
-      logChatDebug("error", {
-        status,
-        serverMsg,
-        model,
-        imageUrls,
-        fileUrls,
-      });
+      // logChatDebug("error", {
+      //   status,
+      //   serverMsg,
+      //   model,
+      //   imageUrls,
+      //   fileUrls,
+      // });
       // Improved fallback logic
       const isMissingKey =
         status === 403 ||

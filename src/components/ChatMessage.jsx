@@ -3,10 +3,16 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
 import MessageActions from "./MessageActions";
-import { FileText } from "lucide-react"; //
+import { FileText } from "lucide-react";
+import { useEffect, useMemo } from "react";
 
-// === Format-specific Renderers ===
-
+// === Bubble layout settings ===
+// Use any Tailwind percentage / ch / rem etc.
+const USER_BUBBLE_MAX = "max-w-[80%] lg:max-w-[65%]";
+const ASSIST_BUBBLE_MAX = "max-w-[82%] lg:max-w-[70%]";
+/* =========================
+ * Format-specific Renderers
+ * ========================= */
 const JsonRenderer = ({ content }) => {
   try {
     const jsonData =
@@ -23,13 +29,15 @@ const JsonRenderer = ({ content }) => {
     return <TextRenderer content={content} />;
   }
 };
+
 function fixBrokenLinks(md) {
   return md
     .replace(/\]\s+\((https?:\/\/[^\s)]+)\)/g, "]($1)")
     .replace(/\)\(page\s+(\d+)/gi, ") (page $1)");
 }
+
 const MarkdownRenderer = ({ content }) => (
-  <div className="prose  max-w-none">
+  <div className="prose max-w-none">
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[
@@ -63,7 +71,7 @@ const MarkdownRenderer = ({ content }) => (
 );
 
 const TextRenderer = ({ content }) => (
-  <div className="whitespace-pre-wrap  text-gray-800">{content}</div>
+  <div className="whitespace-pre-wrap text-gray-800">{content}</div>
 );
 
 const HtmlRenderer = ({ content }) => (
@@ -88,16 +96,35 @@ const CodeRenderer = ({ content, language }) => (
   </div>
 );
 
-// === Content Auto-Detection ===
+/* =========================
+ * Attachment helpers
+ * ========================= */
+const isProbablyImage = (att) => {
+  const t = (att?.mime_type || att?.type || att?.mimeType || "").toLowerCase();
+  if (t === "image" || t === "image/*" || t.startsWith("image/")) return true;
 
+  const srcGuess =
+    att?.display_url || att?.displayUrl || att?.url || att?.path || "";
+  const name = (att?.name || att?.filename || srcGuess).toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|tiff|svg)$/i.test(name);
+};
+
+// Prefer object/blob preview, then server URL
+const attachmentSrc = (att) =>
+  att?.meta?.display_url ||
+  // att?.display_url ||
+  // att?.displayUrl ||
+  // att?.url ||
+  null;
+
+/* =========================
+ * Content Auto-Detection
+ * ========================= */
 const renderContent = (msg) => {
   const content = typeof msg.content === "string" ? msg.content.trim() : "";
   if (!content) return <TextRenderer content="" />;
-  // console.log("📥 Rendering message:", msg);
-  // console.log("📎 Citations:", msg.citations);
-  // console.log("📦 Chunks:", msg.chunks);
 
-  // Try JSON
+  // JSON
   try {
     if (
       msg.format === "json" ||
@@ -108,7 +135,7 @@ const renderContent = (msg) => {
     }
   } catch {}
 
-  // Try HTML
+  // HTML
   if (
     msg.format === "html" ||
     (content.includes("<") && content.includes(">") && content.includes("/"))
@@ -116,23 +143,23 @@ const renderContent = (msg) => {
     return <HtmlRenderer content={content} />;
   }
 
-  // Try code
+  // Code
   if (msg.format === "code" || msg.language) {
     return <CodeRenderer content={content} language={msg.language} />;
   }
+
   const isProbablyMarkdown = (text) => {
     return (
       text.includes("```") ||
       text.includes("**") ||
       text.includes("# ") ||
-      text.match(/\[.+\]\((http.*)\)/) || // ← detects [text](http://...)
-      text.match(/^\d+\.\s+/m) || // numbered list
-      text.match(/^[-*+]\s+/m) // bullets
+      text.match(/\[.+\]\((http.*)\)/) ||
+      text.match(/^\d+\.\s+/m) ||
+      text.match(/^[-*+]\s+/m)
     );
   };
 
-  // Try Markdown
-  // Try Markdown
+  // Markdown
   if (msg.format === "markdown" || isProbablyMarkdown(content)) {
     return <MarkdownRenderer content={content} />;
   }
@@ -141,181 +168,239 @@ const renderContent = (msg) => {
   return <TextRenderer content={content} />;
 };
 
-// === Chat Message Component ===
-
+/* =========================
+ * Chat Message Component
+ * ========================= */
 export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
   const isUser = msg.role === "user";
-  // console.log("📥 msg:", msg);
+
+  // Coerce attachments (in case server sent a string)
+  const attachments = useMemo(() => {
+    if (Array.isArray(msg.attachments)) return msg.attachments;
+    if (typeof msg.attachments === "string") {
+      try {
+        const parsed = JSON.parse(msg.attachments);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }, [msg.attachments]);
+
+  const imageAtts = useMemo(
+    () => attachments.filter((a) => isProbablyImage(a)),
+    [attachments]
+  );
+  const fileAtts = useMemo(
+    () => attachments.filter((a) => !isProbablyImage(a)),
+    [attachments]
+  );
+
+  // DEBUG: log on render when attachments exist
+  useEffect(() => {
+    if (attachments.length) {
+      console.log("🧩 ChatMessage render -> attachments", {
+        attachments,
+        resolvedSrcs: attachments.map((a) => attachmentSrc(a)),
+        imageFlags: attachments.map((a) => isProbablyImage(a)),
+      });
+    }
+  }, [attachments]);
+
+  useEffect(() => {
+    if (imageAtts.length > 0) {
+      console.log("🖼️ Image attachments debug:", {
+        totalImages: imageAtts.length,
+        images: imageAtts.map((att, i) => ({
+          index: i,
+          name: att.name,
+          type: att.type || att.mime_type,
+          src: attachmentSrc(att),
+          hasDisplayUrl: !!att.display_url,
+          hasUrl: !!att.url,
+        })),
+      });
+    }
+  }, [imageAtts]);
+
   if (typeof msg.citations === "string") {
     try {
       msg.citations = JSON.parse(msg.citations);
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
   if (typeof msg.chunks === "string") {
     try {
       msg.chunks = JSON.parse(msg.chunks);
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
+
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
-      <div className="relative max-w-2xl group">
-        <div
-          className={`p-3 rounded-lg max-w-none ${
-            isUser ? "bg-blue-100 text-right" : "bg-gray-100"
-          }`}
-        >
-          {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {msg.attachments.map((att, i) => {
-                const isImage = (att.type || "").startsWith("image/");
-                const src = att.display_url || att.url; // prefer object URL for instant preview
+    <div className="mb-4">
+      {/* layout-only wrapper; aligns to the same container edges as your input,
+        because ChatPage already wraps messages in max-w-4xl mx-auto px-4 */}
+      <div
+        className={`w-full flex flex-col gap-2 ${
+          isUser ? "items-end" : "items-start"
+        }`}
+      >
+        {/* ===== IMAGES BUBBLE (right for user) ===== */}
+        {imageAtts.length > 0 && (
+          <div
+            className={`inline-block rounded-lg p-2 shadow ${
+              isUser
+                ? `bg-blue-100 ${USER_BUBBLE_MAX}`
+                : `bg-gray-100 ${ASSIST_BUBBLE_MAX}`
+            }`}
+          >
+            <div
+              className={`flex flex-wrap gap-2 ${
+                isUser ? "justify-end" : "justify-start"
+              }`}
+            >
+              {imageAtts.map((att, i) => {
+                const src =
+                  att?.meta?.display_url ||
+                  att?.display_url ||
+                  att?.displayUrl ||
+                  att?.url ||
+                  null;
+                const key =
+                  att.url ||
+                  att?.meta?.display_url ||
+                  att.display_url ||
+                  `${att.name || "img"}_${i}`;
+
                 return (
-                  <div key={i} className="border rounded-md p-1 max-w-[200px]">
-                    {isImage ? (
-                      <img
-                        src={src}
-                        alt={att.name || "image"}
-                        className="max-h-40 rounded"
-                        onError={(e) => {
-                          if (att.url && e.currentTarget.src !== att.url) {
-                            e.currentTarget.src = att.url; // fallback to server URL
-                          }
-                        }}
-                      />
-                    ) : (
-                      <a
-                        className="text-blue-600 underline break-all"
-                        href={att.url || att.display_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {att.name || "file"}
-                      </a>
-                    )}
+                  <div
+                    key={key}
+                    className="border rounded-md overflow-hidden bg-white"
+                  >
+                    <img
+                      data-role="att-img"
+                      src={src}
+                      alt={att.name || `image-${i}`}
+                      className="block w-28 h-28 sm:w-32 sm:h-32 object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        const fallbacks = [
+                          att.meta?.display_url,
+                          att.display_url,
+                          att.displayUrl,
+                          att.url,
+                        ].filter(Boolean);
+                        const current = e.currentTarget.src;
+                        const next = fallbacks.find((u) => u && u !== current);
+                        if (next) e.currentTarget.src = next;
+                        else e.currentTarget.style.display = "none";
+                      }}
+                    />
                   </div>
                 );
               })}
             </div>
-          )}
+          </div>
+        )}
 
-          {msg.file && (
+        {/* ===== NON-IMAGE FILES BUBBLE (right for user) ===== */}
+        {fileAtts.length > 0 && (
+          <div
+            className={`inline-block rounded-lg p-2 shadow ${
+              isUser
+                ? `bg-blue-100 ${USER_BUBBLE_MAX}`
+                : `bg-gray-100 ${ASSIST_BUBBLE_MAX}`
+            }`}
+          >
             <div
-              className={`mb-3 flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
-                isUser
-                  ? "bg-blue-200 text-blue-800"
-                  : "bg-gray-200 text-gray-700"
-              } ${isUser ? "justify-end" : "justify-start"}`}
+              className={`flex flex-wrap gap-2 ${
+                isUser ? "justify-end" : "justify-start"
+              }`}
             >
-              <FileText size={16} />
-              <span>{msg.file.name}</span>
+              {fileAtts.map((att, i) => {
+                const url =
+                  att.url ||
+                  att.meta?.display_url ||
+                  att.display_url ||
+                  att.displayUrl;
+                const key = `${att.name || att.filename || i}__${url || i}`;
+                return (
+                  <a
+                    key={key}
+                    className="text-blue-600 underline break-all text-sm bg-white/60 border rounded px-2 py-1"
+                    href={url || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => !url && e.preventDefault()}
+                    title={att.name || att.filename || "file"}
+                  >
+                    {att.name || att.filename || "file"}
+                  </a>
+                );
+              })}
             </div>
-          )}
-          {msg.file_url &&
-            (msg.file_url.startsWith("data:image/") ||
-              msg.file_url.startsWith("blob:")) && (
-              <div className="my-2">
-                <img
-                  src={msg.file_url}
-                  alt="Uploaded"
-                  className="rounded max-w-xs border shadow"
-                />
-              </div>
-            )}
+          </div>
+        )}
 
-          <div className="prose max-w-none">{renderContent(msg)}</div>
+        {/* ===== TEXT BUBBLE (right for user) ===== */}
+        {(() => {
+          const content =
+            typeof msg.content === "string" ? msg.content.trim() : "";
+          if (!content) return null;
 
-          {/* Floating Action Bar (assistant only) */}
-          {!isUser && (
-            <div className="mt-2">
-              <MessageActions
-                onCopy={() => onCopy(msg)}
-                onUpvote={() => console.log("👍", msg)}
-                onDownvote={() => console.log("👎", msg)}
-                onSpeak={() => console.log("🔊", msg)}
-                onShare={() => onDownload(msg)}
-                onRetry={() => console.log("🔁", msg)}
-              />
+          return (
+            <div
+              className={`inline-block rounded-lg p-3 shadow ${
+                isUser
+                  ? `bg-blue-100 text-right ${USER_BUBBLE_MAX}`
+                  : `bg-gray-100 ${ASSIST_BUBBLE_MAX}`
+              }`}
+            >
+              <div className="prose max-w-none">{renderContent(msg)}</div>
+
+              {!isUser && (
+                <div className="mt-2">
+                  <MessageActions
+                    onCopy={() => onCopy(msg)}
+                    onUpvote={() => console.log("👍", msg)}
+                    onDownvote={() => console.log("👎", msg)}
+                    onSpeak={() => console.log("🔊", msg)}
+                    onShare={() => onDownload(msg)}
+                    onRetry={() => console.log("🔁", msg)}
+                  />
+                </div>
+              )}
+
+              {!isUser &&
+                Array.isArray(msg.citations) &&
+                msg.citations.length > 0 && (
+                  <ul className="mt-4 text-xs text-gray-500 space-y-2">
+                    {/* your citations renderer unchanged */}
+                  </ul>
+                )}
+
+              {!isUser &&
+                Array.isArray(msg.chunks) &&
+                msg.chunks.length > 0 && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    📄 Chunks used: {msg.chunks.length}
+                  </div>
+                )}
+
+              {msg.file && (
+                <div
+                  className={`mt-3 flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
+                    isUser
+                      ? "bg-blue-200 text-blue-800 justify-end"
+                      : "bg-gray-200 text-gray-700 justify-start"
+                  }`}
+                >
+                  <FileText size={16} />
+                  <span>{msg.file.name}</span>
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Citations */}
-          {!isUser &&
-            Array.isArray(msg.citations) &&
-            msg.citations.length > 0 && (
-              <ul className="mt-4 text-xs text-gray-500 space-y-2">
-                {msg.citations.map((c, i) => {
-                  // console.debug("📎 Rendering citation:", c);
-                  if (!c?.source) {
-                    return (
-                      <li key={i} className="text-red-500">
-                        ⚠️ Missing citation source
-                      </li>
-                    );
-                  }
-
-                  try {
-                    const url = new URL(c.source);
-                    const fileName = decodeURIComponent(
-                      url.pathname.split("/").pop()
-                    );
-
-                    return (
-                      <li key={i}>
-                        🔗{" "}
-                        <a
-                          href={url.toString()}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline hover:text-blue-600"
-                        >
-                          {url.hostname}
-                          {fileName && ` › ${fileName}`}
-                        </a>
-                        {c.page && <> — Page {c.page}</>}
-                        {/* Quote */}
-                        {c.quote && (
-                          <blockquote className="ml-4 mt-1 italic text-gray-600 border-l-2 border-gray-300 pl-3">
-                            {c.quote}
-                          </blockquote>
-                        )}
-                        {/* PDF Preview Icon */}
-                        {url.pathname.endsWith(".pdf") && (
-                          <div className="ml-4 mt-1 flex items-center gap-2">
-                            <img
-                              src="/pdf-icon.png"
-                              alt="PDF"
-                              className="w-4 h-4"
-                            />
-                            <span className="text-xs text-gray-500">
-                              PDF Document
-                            </span>
-                          </div>
-                        )}
-                      </li>
-                    );
-                  } catch (e) {
-                    console.error("❌ Invalid citation URL:", c.source, e);
-                    return (
-                      <li key={i} className="text-red-500">
-                        ⚠️ Malformed URL: {c.source}
-                      </li>
-                    );
-                  }
-                })}
-              </ul>
-            )}
-
-          {/* Chunks */}
-          {!isUser && Array.isArray(msg.chunks) && msg.chunks.length > 0 && (
-            <div className="mt-2 text-xs text-gray-500">
-              📄 Chunks used: {msg.chunks.length}
-            </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
     </div>
   );

@@ -446,21 +446,21 @@ export async function chatDirect({
     body: fd,
   };
 
-  logChat("request(non-stream)", {
-    url: `${API_URL}/chat/chat-direct`,
-    payloadPreview: {
-      model,
-      session_id,
-      max_tokens,
-      temperature,
-      imagesN: attached_image_urls?.length || 0,
-      filesN: attached_file_urls?.length || 0,
-      hasLegacyFile: !!file,
-      // preview first 2 urls to avoid console spam
-      imageUrls: attached_image_urls?.slice?.(0, 2),
-      fileUrls: attached_file_urls?.slice?.(0, 2),
-    },
-  });
+  // logChat("request(non-stream)", {
+  //   url: `${API_URL}/chat/chat-direct`,
+  //   payloadPreview: {
+  //     model,
+  //     session_id,
+  //     max_tokens,
+  //     temperature,
+  //     imagesN: attached_image_urls?.length || 0,
+  //     filesN: attached_file_urls?.length || 0,
+  //     hasLegacyFile: !!file,
+  //     // preview first 2 urls to avoid console spam
+  //     imageUrls: attached_image_urls?.slice?.(0, 2),
+  //     fileUrls: attached_file_urls?.slice?.(0, 2),
+  //   },
+  // });
 
   const res = await fetch(`${API_URL}/chat/chat-direct`, requestInit);
   const text = await res.text();
@@ -469,11 +469,11 @@ export async function chatDirect({
   try {
     data = JSON.parse(text);
   } catch {
-    logChat("response-raw(non-stream)", text);
+    // logChat("response-raw(non-stream)", text);
     throw new Error(`chat-direct failed: non-JSON response (${res.status})`);
   }
 
-  logChat("response(non-stream)", { status: res.status, data });
+  // logChat("response(non-stream)", { status: res.status, data });
 
   if (!res.ok) throw new Error(data?.detail || "chat-direct failed");
   return data;
