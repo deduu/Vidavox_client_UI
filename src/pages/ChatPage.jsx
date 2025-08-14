@@ -439,7 +439,7 @@ export default function ChatPage() {
           knowledgeBaseFileIds: allFileIds,
           topK,
           threshold,
-          file: attachedFile, // Optional
+          file: fileUrls, // Optional
           session_id: sessionId,
         });
 
