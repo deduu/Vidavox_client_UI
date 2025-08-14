@@ -14,6 +14,7 @@ import {
   uploadAttachment,
 } from "../services/api";
 import { X, ChevronDown, ChevronUp, Settings, FileText } from "lucide-react"; // Import FileText
+import { v4 as uuidv4 } from "uuid";
 
 export default function ChatPage() {
   const [chatMode, setChatMode] = useState("normal");
@@ -28,7 +29,7 @@ export default function ChatPage() {
   const [missingApiKey, setMissingApiKey] = useState(null); // null or a string
 
   const [streaming, setStreaming] = useState(true);
-  const [maxTokens, setMaxTokens] = useState(256);
+  const [maxTokens, setMaxTokens] = useState(2048);
   const [temperature, setTemperature] = useState(0.8);
 
   const [topK, setTopK] = useState(10);
@@ -246,8 +247,10 @@ export default function ChatPage() {
   const addFilesAndUpload = async (files) => {
     const list = Array.from(files);
     // create placeholder rows
+    const id =
+      typeof crypto.randomUUID === "function" ? crypto.randomUUID() : uuidv4();
     const placeholders = list.map((f) => ({
-      id: crypto.randomUUID(),
+      id: id,
       file: f,
       meta: null,
       progress: 0,
@@ -439,7 +442,7 @@ export default function ChatPage() {
           knowledgeBaseFileIds: allFileIds,
           topK,
           threshold,
-          file: attachedFile, // Optional
+          file: fileUrls, // Optional
           session_id: sessionId,
         });
 
@@ -449,13 +452,12 @@ export default function ChatPage() {
           citations: res.response.citations || [],
           chunks: res.response.used_chunks || [],
         };
-        // await sendChatMessageToBackend(userMsg);
+
         await maybeAutoRenameChat(userMsg);
         await sendChatMessageToBackend(assistantMsg);
         setHistory((prev) => [...prev, assistantMsg]);
         setTyping(false);
       } else {
-        // await sendChatMessageToBackend(userMsg);
         await maybeAutoRenameChat(userMsg);
 
         // const mustStream = streaming && !attachedFile;
@@ -501,6 +503,7 @@ export default function ChatPage() {
 
           await sendChatMessageToBackend(assistantMsg);
         } else {
+          setTyping(true);
           const payload = {
             model,
             messages: [{ role: "user", content: message }],
@@ -520,6 +523,7 @@ export default function ChatPage() {
           };
           await sendChatMessageToBackend(assistantMsg);
           setHistory((prev) => [...prev, assistantMsg]);
+          setTyping(false);
         }
       }
     } catch (err) {

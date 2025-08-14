@@ -370,11 +370,70 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
                 </div>
               )}
 
+              {/* Citations */}
               {!isUser &&
                 Array.isArray(msg.citations) &&
                 msg.citations.length > 0 && (
                   <ul className="mt-4 text-xs text-gray-500 space-y-2">
-                    {/* your citations renderer unchanged */}
+                    {msg.citations.map((c, i) => {
+                      // console.debug("📎 Rendering citation:", c);
+                      if (!c?.source) {
+                        return (
+                          <li key={i} className="text-red-500">
+                            ⚠️ Missing citation source
+                          </li>
+                        );
+                      }
+
+                      try {
+                        const url = new URL(c.source);
+                        const fileName = decodeURIComponent(
+                          url.pathname.split("/").pop()
+                        );
+
+                        return (
+                          <li key={i}>
+                            🔗{" "}
+                            <a
+                              href={url.toString()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-blue-600"
+                            >
+                              {url.hostname}
+                              {fileName && ` › ${fileName}`}
+                            </a>
+                            {c.page && <> — Page {c.page}</>}
+                            {/* Quote */}
+                            {c.quote && (
+                              <blockquote className="ml-4 mt-1 italic text-gray-600 border-l-2 border-gray-300 pl-3">
+                                {c.quote}
+                              </blockquote>
+                            )}
+                            {/* PDF Preview Icon */}
+                            {url.pathname.endsWith(".pdf") && (
+                              <div className="ml-4 mt-1 flex items-center gap-2">
+                                <img
+                                  src="/pdf-icon.png"
+                                  alt="PDF"
+                                  className="w-4 h-4"
+                                />
+                                <span className="text-xs text-gray-500">
+                                  PDF Document
+                                </span>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      } catch (e) {
+                        console.error("❌ Invalid citation URL:", c.source, e);
+                        return (
+                          <li key={i} className="text-red-500">
+                            ⚠️ Malformed URL: {c.source}
+                          </li>
+                        );
+                      }
+                    })}
                   </ul>
                 )}
 
