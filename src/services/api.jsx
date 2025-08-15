@@ -712,3 +712,30 @@ export async function updateApiKeys(keys) {
 
   return await res.json(); // returns { status: "ok", updated_keys: [...] }
 }
+export async function extractPdf({ file, options = {}, folderId = null }) {
+  // options: { extract_text, extract_tables, extract_images, page_numbers: number[] }
+  const token = localStorage.getItem("token");
+
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("extract_text", String(!!options.extract_text));
+  fd.append("extract_tables", String(!!options.extract_tables));
+  fd.append("extract_images", String(!!options.extract_images));
+  fd.append("page_numbers", JSON.stringify(options.page_numbers || []));
+  if (folderId) fd.append("folder_id", folderId); // optional: let backend store outputs in that folder
+
+  const res = await fetch(`${API_URL}/extract/pdf`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      Accept: "application/json",
+    },
+    body: fd,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.detail || data?.message || "Extraction failed");
+  }
+  return data; // expected to be { meta, json, markdown, pages, ... }
+}

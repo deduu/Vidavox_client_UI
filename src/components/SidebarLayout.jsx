@@ -9,6 +9,7 @@ import {
   X,
   LayoutDashboard,
   Database,
+  FilePlus,
   LogOut,
   User,
   ChevronDown,
@@ -157,6 +158,16 @@ export default function SidebarLayout({ children, bottomSlot }) {
               active={isActive("/dashboard")}
               onClick={() => {
                 navigate("/dashboard");
+                setOpen(false);
+              }}
+            />
+            {/* Universal Document Parser tab */}
+            <NavButton
+              icon={<FilePlus size={18} />}
+              label="UniDocParser"
+              active={isActive("/unidocparser")}
+              onClick={() => {
+                navigate("/unidocparser");
                 setOpen(false);
               }}
             />

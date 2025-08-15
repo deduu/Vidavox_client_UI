@@ -13,6 +13,7 @@ import ProfileSettingsPage from "./pages/ProfileSettingsPage";
 import { ChatSessionProvider } from "./contexts/ChatSessionContext";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import UniDocParserPage from "./pages/UniDocParserPage";
 
 function PrivateRoute({ children }) {
   const { user, loading } = React.useContext(AuthContext);
@@ -40,6 +41,14 @@ export default function App() {
         element={
           <PrivateRoute>
             <DashboardPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/unidocparser"
+        element={
+          <PrivateRoute>
+            <UniDocParserPage />
           </PrivateRoute>
         }
       />
