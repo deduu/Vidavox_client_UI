@@ -5,10 +5,11 @@ import { flattenAllNodes } from "../utils/tree";
 import { fetchFolderTree } from "../services/api";
 import { useLocation } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
-
+import { extractDocument } from "../services/api";
 /** === Theme to match DashboardPage === */
 const theme = {
-  pageBg: "bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50",
+  pageBg:
+    "bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6 space-y-6",
   glass: "bg-white/60 backdrop-blur-sm border border-white/40",
   sectionHeader: "bg-gradient-to-r from-slate-50/80 to-gray-50/80",
   primaryBtn:
@@ -58,6 +59,11 @@ export default function UniDocParserPage() {
     time: "0s",
   });
 
+  const [result, setResult] = useState(null); // full server response
+  const [jsonText, setJsonText] = useState(""); // fetched from json_output file
+  const [mdText, setMdText] = useState(""); // fetched from markdown_output file
+  const [errorMsg, setErrorMsg] = useState("");
+
   // NEW: control when the results viewer shows (only after Start Extraction)
   const [showViewer, setShowViewer] = useState(false);
 
@@ -105,60 +111,118 @@ export default function UniDocParserPage() {
 
   const onBrowseClick = () => fileInputRef.current?.click();
 
-  // --- Simulated extraction (wire to your backend later) ---
+  function parsePageRange(rangeStr) {
+    if (!rangeStr?.trim()) return [];
+    const parts = rangeStr
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const nums = [];
+    for (const p of parts) {
+      if (/^\d+$/.test(p)) nums.push(Number(p));
+      else if (/^\d+\s*-\s*\d+$/.test(p)) {
+        const [a, b] = p.split("-").map((s) => Number(s.trim()));
+        const start = Math.min(a, b),
+          end = Math.max(a, b);
+        for (let i = start; i <= end; i++) nums.push(i);
+      }
+    }
+    // optional: unique & sorted
+    return Array.from(new Set(nums)).sort((a, b) => a - b);
+  }
+
   const startExtraction = async () => {
     if (!file || !destinationId) return;
-    setShowViewer(true); // show viewer now
+
+    setShowViewer(true);
     setCurrentStep(3);
     setProgressVisible(true);
+    setProgressPct(0);
     setStatusLabel("Uploading...");
     setStatusSub("This may take a few moments");
-    setProgressPct(0);
+    setErrorMsg("");
+    setResult(null);
+    setJsonText("");
+    setMdText("");
 
-    for (let i = 1; i <= 25; i++) {
-      await sleep(20);
-      setProgressPct((p) => Math.min(100, p + 2));
+    const tick = setInterval(
+      () => setProgressPct((p) => (p < 90 ? p + 1 : p)),
+      120
+    );
+
+    try {
+      // Call your client (only file is required by backend)
+      const data = await extractDocument({ file });
+
+      clearInterval(tick);
+      setStatusLabel("Processing...");
+      setProgressPct(95);
+
+      // ---- Map stats from extraction_result ----
+      const ex = data?.extraction_result || {};
+      const pages = Array.isArray(ex.pages) ? ex.pages : [];
+      setStats({
+        pages: pages.length,
+        textBlocks: 0, // you can compute from elements if you want
+        tables: 0, // same here
+        time: ex.processing_time ? `${Math.round(ex.processing_time)}s` : "—",
+      });
+
+      // Keep the whole response for tabs to use
+      setResult(data);
+
+      // ---- Fetch json/markdown text if your API serves these filenames ----
+      // Adjust these URLs to match your static/outputs route.
+      // e.g., if your server exposes /media/<name>, use that.
+      if (data.json_output) {
+        const r = await fetch(
+          `${API_URL}/media/${encodeURIComponent(data.json_output)}`
+        );
+        setJsonText(await r.text());
+      }
+      if (data.markdown_output) {
+        const r = await fetch(
+          `${API_URL}/media/${encodeURIComponent(data.markdown_output)}`
+        );
+        setMdText(await r.text());
+      }
+
+      setProgressPct(100);
+      setStatusLabel("Completed");
+      setStatusSub("Your file has been processed");
+      setCurrentStep(4);
+      setActiveTab("summary");
+    } catch (err) {
+      clearInterval(tick);
+      console.error(err);
+      setProgressPct(100);
+      setStatusLabel("Failed");
+      setStatusSub("");
+      setErrorMsg(err?.message || "Extraction failed");
     }
-    setStatusLabel("Processing...");
-    for (let i = 1; i <= 25; i++) {
-      await sleep(25);
-      setProgressPct((p) => Math.min(100, p + 2));
-    }
-
-    setStatusLabel("Completed");
-    setStatusSub("Your file has been processed");
-    setProgressPct(100);
-
-    setStats({
-      pages: 12,
-      textBlocks: extractText ? 84 : 0,
-      tables: extractTables ? 6 : 0,
-      time: "8s",
-    });
-
-    setCurrentStep(4);
-    setActiveTab("summary");
   };
 
   return (
     <SidebarLayout>
       {/* Page background to match Dashboard */}
       <div className={`min-h-screen ${theme.pageBg}`}>
-        {/* Header */}
-        <header className="relative overflow-hidden">
-          <div className="relative z-10 max-w-7xl mx-auto px-4 py-6">
-            <div className="flex justify-between items-center">
-              <div className="space-y-1">
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  Universal Document Parser
-                </h1>
-                <p className="text-lg text-gray-600 font-light">
-                  Transform your documents with AI-powered extraction
-                </p>
+        <div className="flex items-center justify-between">
+          {/* Header */}
+          <header className="relative overflow-hidden">
+            <div className="relative z-10 max-w-7xl mx-auto px-4 py-6">
+              <div className="flex justify-between items-center">
+                <div className="space-y-1">
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                    Universal Document Parser
+                  </h1>
+                  <p className="text-lg text-gray-600 font-light">
+                    Transform your documents with AI-powered extraction
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
+        </div>
 
         {/* Stepper */}
         <div className="max-w-7xl mx-auto px-4 py-2">
@@ -200,7 +264,7 @@ export default function UniDocParserPage() {
         </div>
 
         {/* Main */}
-        <main className="max-w-7xl mx-auto px-4 pb-10">
+        <main className="flex items-center justify-between">
           {/* items-stretch + min-h to align heights */}
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 items-stretch">
             {/* Left: Upload & Configure */}
@@ -361,6 +425,11 @@ export default function UniDocParserPage() {
                             : "Select Destination First"}
                         </span>
                       </button>
+                    </div>
+                  )}
+                  {errorMsg && (
+                    <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700">
+                      {errorMsg}
                     </div>
                   )}
 
@@ -599,17 +668,22 @@ export default function UniDocParserPage() {
                             </div>
                           </div>
                         </div>
+
                         <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
                           <div
                             className="p-6 overflow-x-auto"
                             style={{ minHeight: 400, maxHeight: 600 }}
                           >
-                            <div className="text-center py-12 text-gray-500">
-                              <div className="text-4xl mb-4">🧩</div>
-                              <p className="text-lg">
-                                JSON data will appear here
-                              </p>
-                            </div>
+                            {jsonText ? (
+                              <pre className="bg-gray-50 rounded-lg p-4 text-sm">
+                                {jsonText}
+                              </pre>
+                            ) : (
+                              <EmptyState
+                                icon="🧩"
+                                text="JSON data will appear here"
+                              />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -635,11 +709,10 @@ export default function UniDocParserPage() {
                             className="p-6 overflow-x-auto"
                             style={{ maxHeight: 600 }}
                           >
-                            <pre className="bg-gray-50 rounded-lg p-4 text-sm">{`# Markdown content will appear here...
-
-- Lorem ipsum
-- Dolor sit amet
-`}</pre>
+                            <pre className="bg-gray-50 rounded-lg p-4 text-sm whitespace-pre-wrap">
+                              {result?.markdown ??
+                                `# Markdown content will appear here...\n\n- Lorem ipsum\n- Dolor sit amet`}
+                            </pre>
                           </div>
                         </div>
                       </div>

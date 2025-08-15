@@ -219,9 +219,21 @@ export default function SidebarLayout({ children, bottomSlot }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden md:pl-72 bg-white">
+      <main
+        className="
+    flex-1 flex flex-col
+    overflow-y-auto overflow-x-hidden
+    md:pl-72
+    min-h-[100dvh]     /* or min-h-screen */
+    bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50
+  "
+      >
         {children}
       </main>
+
+      {/* <main className="flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden md:pl-72 ">
+        {children}
+      </main> */}
     </div>
   );
 }

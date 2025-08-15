@@ -712,30 +712,60 @@ export async function updateApiKeys(keys) {
 
   return await res.json(); // returns { status: "ok", updated_keys: [...] }
 }
-export async function extractPdf({ file, options = {}, folderId = null }) {
-  // options: { extract_text, extract_tables, extract_images, page_numbers: number[] }
+export async function extractDocument({ file }) {
   const token = localStorage.getItem("token");
 
   const fd = new FormData();
-  fd.append("file", file);
-  fd.append("extract_text", String(!!options.extract_text));
-  fd.append("extract_tables", String(!!options.extract_tables));
-  fd.append("extract_images", String(!!options.extract_images));
-  fd.append("page_numbers", JSON.stringify(options.page_numbers || []));
-  if (folderId) fd.append("folder_id", folderId); // optional: let backend store outputs in that folder
+  fd.append("file", file); // only what backend expects
 
-  const res = await fetch(`${API_URL}/extract/pdf`, {
+  const res = await fetch(`http://127.0.0.1:8007/api/v1/extractpdf`, {
     method: "POST",
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       Accept: "application/json",
+      // DO NOT set Content-Type here; browser will set proper multipart boundary
     },
     body: fd,
   });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    // FastAPI errors typically have {detail: ...}
     throw new Error(data?.detail || data?.message || "Extraction failed");
   }
-  return data; // expected to be { meta, json, markdown, pages, ... }
+
+  // Normalize keys so the rest of your UI can use consistent names if you want:
+  return {
+    message: data.message,
+    extraction_result: data.extraction_result,
+    json: data.json_output, // normalized
+    markdown: data.markdown_output, // normalized
+  };
 }
+// export async function extractDocument({ file, options = {}, folderId = null }) {
+//   // options: { extract_text, extract_tables, extract_images, page_numbers: number[] }
+//   const token = localStorage.getItem("token");
+
+//   const fd = new FormData();
+//   fd.append("file", file);
+//   fd.append("extract_text", String(!!options.extract_text));
+//   fd.append("extract_tables", String(!!options.extract_tables));
+//   fd.append("extract_images", String(!!options.extract_images));
+//   fd.append("page_numbers", JSON.stringify(options.page_numbers || []));
+//   if (folderId) fd.append("folder_id", folderId); // optional: let backend store outputs in that folder
+
+//   const res = await fetch(`${API_URL}/extractpdf`, {
+//     method: "POST",
+//     headers: {
+//       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+//       Accept: "application/json",
+//     },
+//     body: fd,
+//   });
+
+//   const data = await res.json().catch(() => ({}));
+//   if (!res.ok) {
+//     throw new Error(data?.detail || data?.message || "Extraction failed");
+//   }
+//   return data; // expected to be { meta, json, markdown, pages, ... }
+// }
