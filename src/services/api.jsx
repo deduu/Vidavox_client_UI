@@ -311,14 +311,14 @@ export async function createKnowledgeBase(name, fileIds) {
   return data;
 }
 
-export async function updateKnowledgeBase(kbId, data) {
+export async function updateKnowledgeBase(kbId, name, fileIds) {
   const res = await fetch(`${API_URL}/knowledge_bases/${kbId}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       ...authHeader(),
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ name, file_ids: fileIds }),
   });
   const response = await res.json();
   if (!res.ok)

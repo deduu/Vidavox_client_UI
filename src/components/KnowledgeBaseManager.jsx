@@ -4,6 +4,7 @@ import {
   createKnowledgeBase,
   deleteKnowledgeBase,
   fetchFolderTree,
+  updateKnowledgeBase,
 } from "../services/api";
 import KnowledgeBaseEditor from "./KnowledgeBaseEditor";
 import { flattenFilesWithPath } from "../utils/tree";
@@ -15,17 +16,28 @@ export default function KnowledgeBaseManager({ preselectedFileIds = [] }) {
   const [loading, setLoading] = useState(false);
   const [selectedFilesOnInit, setSelectedFilesOnInit] =
     useState(preselectedFileIds);
+  const [editingKB, setEditingKB] = useState(null);
 
-  const loadKbs = () => {
-    console.log("Loading knowledge bases..."); // Log when the loading starts
-    listKnowledgeBases()
-      .then((data) => {
-        console.log("Knowledge bases loaded successfully:", data); // Log after successful load
-        setKbs(data);
-      })
-      .catch((error) => {
-        console.error("Error loading knowledge bases:", error); // Log if an error occurs
-      });
+  // const loadKbs = () => {
+  //   console.log("Loading knowledge bases..."); // Log when the loading starts
+  //   listKnowledgeBases()
+  //     .then((data) => {
+  //       console.log("Knowledge bases loaded successfully:", data); // Log after successful load
+  //       setKbs(data);
+  //     })
+  //     .catch((error) => {
+  //       console.error("Error loading knowledge bases:", error); // Log if an error occurs
+  //     });
+  // };
+
+  const loadKbs = async () => {
+    console.log("Loading knowledge bases...");
+    try {
+      const data = await listKnowledgeBases();
+      setKbs(data);
+    } catch (e) {
+      console.error("Error loading knowledge bases:", e);
+    }
   };
 
   const loadFiles = async () => {
@@ -48,10 +60,18 @@ export default function KnowledgeBaseManager({ preselectedFileIds = [] }) {
 
   const handleSave = async (name, fileIds) => {
     setLoading(true);
-    await createKnowledgeBase(name, fileIds);
-    setShowEditor(false);
-    await loadKbs();
-    setLoading(false);
+    try {
+      if (editingKB) {
+        await updateKnowledgeBase(editingKB.id, name, fileIds); // <-- NEW
+      } else {
+        await createKnowledgeBase(name, fileIds);
+      }
+      await loadKbs();
+      setShowEditor(false);
+      setEditingKB(null); // <-- reset
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (kbId) => {
@@ -60,6 +80,22 @@ export default function KnowledgeBaseManager({ preselectedFileIds = [] }) {
       await loadKbs();
     }
   };
+
+  const openCreate = () => {
+    setEditingKB(null);
+    setShowEditor(true);
+  };
+
+  const openEdit = (kb) => {
+    setEditingKB(kb);
+    setShowEditor(true);
+  };
+
+  // derive the props for the modal depending on mode
+  const editorExistingName = editingKB ? editingKB.name : "";
+  const editorExistingFileIds = editingKB
+    ? (editingKB.files || []).map((f) => f.id)
+    : selectedFilesOnInit;
 
   return (
     <div className="space-y-6">
@@ -78,7 +114,7 @@ export default function KnowledgeBaseManager({ preselectedFileIds = [] }) {
         </div>
         <button
           className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 transform hover:scale-105"
-          onClick={() => setShowEditor(true)}
+          onClick={openCreate}
         >
           <svg
             className="w-5 h-5 mr-2"
@@ -100,9 +136,15 @@ export default function KnowledgeBaseManager({ preselectedFileIds = [] }) {
       {showEditor && (
         <KnowledgeBaseEditor
           onSave={handleSave}
-          onCancel={() => setShowEditor(false)}
+          onCancel={() => {
+            setShowEditor(false);
+            setEditingKB(null);
+          }}
           allFiles={allFiles}
-          existingFileIds={selectedFilesOnInit}
+          existingName={editorExistingName} // <-- NEW
+          existingFileIds={editorExistingFileIds} // <-- NEW
+          submitLabel={editingKB ? "Save Changes" : "Create Knowledge Base"} // <-- NEW
+          title={editingKB ? "Edit Knowledge Base" : "Knowledge Base Editor"} // <-- NEW
         />
       )}
 
@@ -133,7 +175,7 @@ export default function KnowledgeBaseManager({ preselectedFileIds = [] }) {
           </p>
           <button
             className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 transform hover:scale-105"
-            onClick={() => setShowEditor(true)}
+            onClick={openCreate}
           >
             <svg
               className="w-5 h-5 mr-2"
@@ -215,6 +257,25 @@ export default function KnowledgeBaseManager({ preselectedFileIds = [] }) {
                       </div>
                     )}
                   </div>
+                  <button
+                    className="p-2 text-gray-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg w-10 h-10 flex items-center justify-center border border-gray-300"
+                    onClick={() => openEdit(kb)}
+                    title="Edit knowledge base"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15.232 5.232l3.536 3.536M4 13v6h6l10-10a1.414 1.414 0 00-2-2L4 13z"
+                      />
+                    </svg>
+                  </button>
 
                   {/* Delete button - Made always visible for debugging */}
                   <button

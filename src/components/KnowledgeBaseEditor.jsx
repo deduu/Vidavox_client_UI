@@ -7,6 +7,9 @@ export default function KnowledgeBaseEditor({
   existingName = "",
   existingFileIds = [],
   allFiles = [],
+  editingKbId = null,
+  submitLabel = "Create Knowledge Base", // <-- NEW
+  title = "Knowledge Base Editor", // <-- NEW
 }) {
   const [name, setName] = useState(existingName);
   const [selected, setSelected] = useState(new Set(existingFileIds));
@@ -24,6 +27,15 @@ export default function KnowledgeBaseEditor({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onCancel]);
+
+  // keep state in sync with props for edit/create toggles
+  useEffect(() => {
+    setName(existingName || "");
+  }, [existingName]);
+
+  useEffect(() => {
+    setSelected(new Set(existingFileIds || []));
+  }, [existingFileIds]);
 
   const toggleFile = (id) => {
     const copy = new Set(selected);
@@ -71,11 +83,11 @@ export default function KnowledgeBaseEditor({
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">
-                  Knowledge Base Editor
-                </h2>
+                <h2 className="text-xl font-bold text-white">{title}</h2>
                 <p className="text-blue-100 text-sm">
-                  Create and configure your knowledge base
+                  {title === "Edit Knowledge Base"
+                    ? "Update name and files"
+                    : "Create and configure your knowledge base"}
                 </p>
               </div>
             </div>
@@ -272,7 +284,7 @@ export default function KnowledgeBaseEditor({
                     d="M5 13l4 4L19 7"
                   />
                 </svg>
-                <span>Create Knowledge Base</span>
+                <span>{submitLabel}</span> {/* <-- CHANGED */}
               </div>
             </button>
           </div>
