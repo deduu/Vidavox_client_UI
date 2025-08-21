@@ -1,4 +1,13 @@
-export const API_URL = "http://35.186.159.2/v1";
+// export const API_URL = "http://35.186.159.2/v1";
+// src/services/api.js (top)
+const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+export const API_URL =
+  // allow override via env (e.g., staging)
+  (import.meta?.env?.VITE_API_BASE_URL &&
+    import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")) ||
+  // dev fallback
+  (isLocal ? "http://localhost:8000/v1" : "/v1"); // prod uses same-origin over HTTPS
 
 function authHeader() {
   const token = localStorage.getItem("token");

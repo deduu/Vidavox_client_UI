@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import SidebarLayout from "../components/SidebarLayout";
 import ChatMessage from "../components/ChatMessage";
 import ChatInput from "../components/ChatInput";
@@ -13,8 +13,20 @@ import {
   listLLMs,
   uploadAttachment,
 } from "../services/api";
-import { X, ChevronDown, ChevronUp, Settings, FileText } from "lucide-react"; // Import FileText
+import {
+  X,
+  ChevronDown,
+  ChevronUp,
+  Settings,
+  FileText,
+  ChevronsDown,
+} from "lucide-react";
+
 import { v4 as uuidv4 } from "uuid";
+import { getChatModel, saveChatModel } from "../utils/chatModelStorage";
+
+// 1) Put this near the top of the component
+const DEFAULT_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct";
 
 export default function ChatPage() {
   const [chatMode, setChatMode] = useState("normal");
@@ -25,7 +37,7 @@ export default function ChatPage() {
   const [kbs, setKbs] = useState([]);
   const [selectedKbs, setSelectedKbs] = useState([]);
 
-  const [model, setModel] = useState("meta-llama/Llama-3.1-8B-Instruct");
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [missingApiKey, setMissingApiKey] = useState(null); // null or a string
 
   const [streaming, setStreaming] = useState(true);
@@ -57,6 +69,51 @@ export default function ChatPage() {
   const ac = new AbortController();
   const { signal } = ac;
 
+  const listRef = useRef(null); // scrollable container
+  const bottomRef = useRef(null); // anchor at the very bottom
+
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const isAtBottomRef = useRef(true); // avoids stale closure during streaming
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const inputRef = useRef(null);
+  const [jumpBtnBottom, setJumpBtnBottom] = useState(96); // px fallback
+
+  const scrollToBottom = (behavior = "smooth") =>
+    bottomRef.current?.scrollIntoView({ behavior });
+
+  const handleScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    const threshold = 80; // px tolerance
+    const atBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+    setIsAtBottom(atBottom);
+    isAtBottomRef.current = atBottom;
+    if (atBottom) setUnreadCount(0);
+  };
+  useLayoutEffect(() => {
+    const update = () => {
+      const h = inputRef.current?.getBoundingClientRect().height ?? 80;
+      setJumpBtnBottom(h + 12); // 12px gap above the input
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  // useEffect(() => {
+  //   scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  // }, [history.length]);
+
+  useEffect(() => {
+    if (isAtBottom) {
+      scrollToBottom("smooth");
+    } else {
+      // user is reading older messages; don’t yank the view
+      setUnreadCount((c) => c + 1);
+    }
+  }, [history.length, isAtBottom]);
+
   const logChatDebug = (stage, payload) => {
     try {
       // keep the last payload/response on window for easy inspection
@@ -85,18 +142,66 @@ export default function ChatPage() {
       .then((list) => {
         setAvailableModels(list);
 
-        const savedModel = localStorage.getItem("selectedModel");
-        const fallback =
-          list.find((m) => m.id === "gemini-2.0-flash") || list[0];
+        // const saved = localStorage.getItem("selectedModel");
+        // const exists = (id) => !!id && list.some((m) => m.id === id);
 
-        if (savedModel && list.some((m) => m.id === savedModel)) {
-          setModel(savedModel);
-        } else {
-          setModel(fallback.id);
-        }
+        // const initial =
+        //   (exists(saved) && saved) ||
+        //   (exists(DEFAULT_MODEL) && DEFAULT_MODEL) ||
+        //   list.find((m) => m.id === DEFAULT_MODEL)?.id ||
+        //   list[0]?.id;
+
+        // if (initial) setModel(initial);
+
+        // if (!saved && initial) {
+        //   localStorage.setItem("selectedModel", initial);
+        // }
       })
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!availableModels.length || !currentChatId) return;
+
+    const exists = (id) => !!id && availableModels.some((m) => m.id === id);
+    const saved = getChatModel(currentChatId);
+
+    // Determine if the chat is "new" by lack of a saved model (robust)
+    const isNewChat = !saved;
+
+    if (isNewChat) {
+      // First time this chat sees a model → default to Qwen (if present) else first model
+      const pick =
+        (exists(DEFAULT_MODEL) && DEFAULT_MODEL) || availableModels[0]?.id;
+
+      if (pick) {
+        setModel(pick);
+        saveChatModel(currentChatId, pick); // save ONCE
+      }
+    } else {
+      // Existing chat → always load its saved model
+      const pick = exists(saved)
+        ? saved
+        : (exists(DEFAULT_MODEL) && DEFAULT_MODEL) || availableModels[0]?.id;
+
+      if (pick) {
+        setModel(pick);
+        // If we had to fallback because the saved one disappeared, refresh storage
+        if (pick !== saved) saveChatModel(currentChatId, pick);
+      }
+    }
+  }, [currentChatId, availableModels]);
+
+  // useEffect(() => {
+  //   if (activeChat?.title === "New Chat") {
+  //     const exists = (id) => availableModels.some((m) => m.id === id);
+  //     const pick =
+  //       (exists(DEFAULT_MODEL) && DEFAULT_MODEL) || availableModels[0]?.id;
+
+  //     if (pick) setModel(pick);
+  //     // Note: don't touch localStorage here; only update it when the user explicitly changes the select.
+  //   }
+  // }, [activeChat?.id, activeChat?.title, availableModels]);
 
   useEffect(() => {
     if (!currentChatId) return;
@@ -133,9 +238,9 @@ export default function ChatPage() {
     }
   }, [activeChat?.title]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history.length]);
+  // useEffect(() => {
+  //   bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  // }, [history.length]);
 
   // ---- KB persistence helpers ----
   const KB_STORAGE_KEY = "selectedKbs.v1";
@@ -496,9 +601,12 @@ export default function ChatPage() {
               });
             }
 
-            setTimeout(() => {
-              scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-            }, 10);
+            if (isAtBottomRef.current) {
+              bottomRef.current?.scrollIntoView({ behavior: "auto" });
+            } else if (!gotFirst) {
+              // count the message once when the first token arrives
+              setUnreadCount((c) => c + 1);
+            }
           }
 
           await sendChatMessageToBackend(assistantMsg);
@@ -647,6 +755,29 @@ export default function ChatPage() {
                   value={model}
                   onChange={(e) => {
                     const value = e.target.value;
+                    console.log(
+                      "💾 Saving model for chat",
+                      currentChatId,
+                      ":",
+                      value
+                    ); // Debug log
+                    setModel(value);
+                    // Save model to this specific chat
+                    saveChatModel(currentChatId, value);
+                  }}
+                  disabled={!availableModels.length}
+                >
+                  {availableModels.map(({ id, label }) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                {/* <select
+                  className="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-w-32"
+                  value={model}
+                  onChange={(e) => {
+                    const value = e.target.value;
                     setModel(value);
                     localStorage.setItem("selectedModel", value);
                   }}
@@ -657,7 +788,7 @@ export default function ChatPage() {
                       {label}
                     </option>
                   ))}
-                </select>
+                </select> */}
               </div>
 
               {/* Knowledge Base Selection - Compact */}
@@ -793,7 +924,11 @@ export default function ChatPage() {
         </div>
 
         {/* Chat Area - Centered with max width */}
-        <div className="flex-1 overflow-y-auto">
+        <div
+          className="flex-1 overflow-y-auto"
+          ref={listRef}
+          onScroll={handleScroll}
+        >
           <div className="max-w-4xl mx-auto px-4 py-6">
             {/* 👇 Add warning here */}
             {missingApiKey && (
@@ -868,11 +1003,30 @@ export default function ChatPage() {
               )}
             </div>
           </div>
-          <div ref={scrollRef} />
+          <div ref={bottomRef} />
         </div>
 
+        {!isAtBottom && (
+          <button
+            onClick={() => scrollToBottom("smooth")}
+            className="fixed left-1/2 -translate-x-1/2 z-50 bg-white border border-gray-200 shadow-md rounded-full px-3 py-2 flex items-center gap-2 hover:bg-gray-50"
+            style={{ bottom: jumpBtnBottom }}
+            title="Jump to latest"
+          >
+            <ChevronsDown size={18} />
+            {unreadCount > 0 && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        )}
+
         {/* Input Area - Modern rounded design */}
-        <div className="flex-shrink-0 bg-gradient-to-t from-white via-white to-white/80 pt-4 pb-6">
+        <div
+          ref={inputRef}
+          className="flex-shrink-0 bg-gradient-to-t from-white via-white to-white/80 pt-4 pb-6"
+        >
           <div className="max-w-4xl mx-auto px-4">
             <div className="bg-white rounded-2xl border border-gray-200/50 overflow-visible">
               <ChatInput

@@ -16,6 +16,9 @@ import {
   Settings,
 } from "lucide-react";
 
+// SidebarLayout.jsx (top-level of the component file)
+const UNIDOCPARSER_ENABLED = false;
+
 export default function SidebarLayout({ children, bottomSlot }) {
   const [open, setOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -166,11 +169,15 @@ export default function SidebarLayout({ children, bottomSlot }) {
               icon={<FilePlus size={18} />}
               label="UniDocParser"
               active={isActive("/unidocparser")}
+              disabled={!UNIDOCPARSER_ENABLED}
+              soonLabel="Launching very soon"
               onClick={() => {
+                // Only runs when enabled (NavButton will guard this)
                 navigate("/unidocparser");
                 setOpen(false);
               }}
             />
+
             <NavButton
               icon={<Database size={18} />}
               label="Knowledge Bases"
@@ -238,20 +245,49 @@ export default function SidebarLayout({ children, bottomSlot }) {
   );
 }
 
-function NavButton({ icon, label, active, onClick }) {
+function NavButton({
+  icon,
+  label,
+  active,
+  onClick,
+  disabled = false,
+  soonLabel,
+}) {
+  const handleClick = (e) => {
+    if (disabled) {
+      e.preventDefault();
+      // Optional: show a toast/modal instead of doing nothing
+      // e.g., toast.info(soonLabel || "Coming soon");
+      return;
+    }
+    onClick?.(e);
+  };
+
   return (
     <button
-      onClick={onClick}
-      className={`flex items-center w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+      onClick={handleClick}
+      disabled={disabled}
+      aria-disabled={disabled}
+      title={disabled ? soonLabel || "Coming soon" : undefined}
+      className={[
+        "flex items-center w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+        disabled
+          ? "opacity-60 cursor-not-allowed"
+          : "hover:bg-gray-50 hover:text-gray-900",
         active
           ? "bg-blue-50 text-blue-700 border border-blue-200"
-          : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-      }`}
+          : "text-gray-700",
+      ].join(" ")}
     >
       <span className={`mr-3 ${active ? "text-blue-600" : "text-gray-400"}`}>
         {icon}
       </span>
-      {label}
+      <span className="flex-1 text-left">{label}</span>
+      {disabled && (
+        <span className="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border bg-amber-100 border-amber-200 text-amber-700">
+          Soon
+        </span>
+      )}
     </button>
   );
 }

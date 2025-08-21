@@ -7,6 +7,7 @@ import {
   getChatMessages,
   addChatMessage,
 } from "../services/api";
+import { cleanupChatModel, cleanupMissing } from "../utils/chatModelStorage";
 
 const ChatSessionContext = createContext();
 
@@ -23,6 +24,7 @@ export function ChatSessionProvider({ children }) {
         // console.log("📥 listChatSessions is running…");
         const sessions = await listChatSessions();
         setChats(sessions);
+        cleanupMissing(sessions.map((s) => s.id));
         if (sessions.length) {
           setCurrentChatId(sessions[0].id);
         } else {
@@ -45,6 +47,7 @@ export function ChatSessionProvider({ children }) {
 
   const deleteChat = async (id) => {
     await deleteChatSession(id);
+    cleanupChatModel(id);
     const filtered = chats.filter((c) => c.id !== id);
     setChats(filtered);
     if (id === currentChatId) {
