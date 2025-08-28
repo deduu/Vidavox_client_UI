@@ -74,7 +74,7 @@ export default function DocExtractPanel({ folderId, onDone }) {
       />
 
       {/* Settings */}
-      <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+      {/* <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
         <div className="font-semibold text-gray-800 mb-3">
           Extraction Settings
         </div>
@@ -112,7 +112,7 @@ export default function DocExtractPanel({ folderId, onDone }) {
             </p>
           )}
         </div>
-      </div>
+      </div> */}
 
       {/* Actions */}
       <div className="flex items-center gap-3">

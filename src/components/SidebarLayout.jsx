@@ -169,7 +169,7 @@ export default function SidebarLayout({ children, bottomSlot }) {
               icon={<FilePlus size={18} />}
               label="UniDocParser"
               active={isActive("/unidocparser")}
-              disabled={!UNIDOCPARSER_ENABLED}
+              // disabled={!UNIDOCPARSER_ENABLED}
               soonLabel="Launching very soon"
               onClick={() => {
                 // Only runs when enabled (NavButton will guard this)

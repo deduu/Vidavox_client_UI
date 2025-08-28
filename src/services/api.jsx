@@ -7,7 +7,7 @@ export const API_URL =
   (import.meta?.env?.VITE_API_BASE_URL &&
     import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")) ||
   // dev fallback
-  (isLocal ? "http://localhost:8000/v1" : "/v1"); // prod uses same-origin over HTTPS
+  (isLocal ? "http://localhost:8005/v1" : "/v1"); // prod uses same-origin over HTTPS
 
 function authHeader() {
   const token = localStorage.getItem("token");
@@ -727,7 +727,7 @@ export async function extractDocument({ file }) {
   const fd = new FormData();
   fd.append("file", file); // only what backend expects
 
-  const res = await fetch(`http://127.0.0.1:8007/api/v1/extractpdf`, {
+  const res = await fetch(`http://127.0.0.1:8010/api/v1/extractpdf`, {
     method: "POST",
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
