@@ -726,8 +726,8 @@ export async function extractDocument({ file }) {
   const token = localStorage.getItem("token");
   const fd = new FormData();
   fd.append("file", file);
-  console.logger("api: ", API_BASE_URL);
-  const res = await fetch(`${API_BASE_URL}/v1/docparser/extract`, {
+  console.log("api: ", API_BASE_URL);
+  const res = await fetch(`${API_BASE_URL}/docparser/extract`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
