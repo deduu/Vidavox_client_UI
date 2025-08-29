@@ -29,6 +29,7 @@ export default function ResultsViewer({
   onTabChange,
   isFullscreen = false,
   onToggleFullscreen = () => {},
+  className = "",
 }) {
   const { copyToClipboard } = useClipboard();
 
@@ -138,21 +139,25 @@ export default function ResultsViewer({
 
   if (!current) {
     return (
-      <div
-        className={`${THEME.glass} rounded-2xl shadow-xl p-16 text-center backdrop-blur-md border border-white/20`}
-      >
-        <div className="text-6xl mb-4 opacity-60">📄</div>
-        <p className="text-gray-500 text-lg font-medium">No pages available</p>
-        <p className="text-gray-400 text-sm mt-2">
-          Upload a document to begin extraction
-        </p>
+      <div className="h-full flex flex-col">
+        <div
+          className={`${THEME.glass} h-full flex flex-col items-center justify-center rounded-2xl shadow-xl p-16 text-center backdrop-blur-md border border-white/20`}
+        >
+          <div className="text-6xl mb-4 opacity-60">📄</div>
+          <p className="text-gray-500 text-lg font-medium">
+            No pages available
+          </p>
+          <p className="text-gray-400 text-sm mt-2">
+            Upload a document to begin extraction
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className={`${THEME.glass} rounded-2xl shadow-xl overflow-hidden backdrop-blur-md border border-white/20 transition-all duration-300 hover:shadow-2xl`}
+      className={`${THEME.glass} h-full min-h-0 flex flex-col overflow-hidden rounded-2xl shadow-xl backdrop-blur-md border border-white/20 transition-all duration-300 hover:shadow-2xl ${className}`}
     >
       {/* ENHANCED HEADER */}
       <div
@@ -273,8 +278,8 @@ export default function ResultsViewer({
       </div>
 
       {/* ENHANCED CONTENT */}
-      <div className="p-6 bg-gradient-to-br from-gray-50/30 to-white/50">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="flex-1 min-h-0 p-6 overflow-hidden bg-gradient-to-br from-gray-50/30 to-white/50">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0">
           {/* LEFT: Enhanced Original PDF Page */}
           <EnhancedPane
             title={
@@ -365,7 +370,7 @@ export default function ResultsViewer({
               </div>
             }
           >
-            <div className="p-6 overflow-auto h-[60vh] prose prose-sm max-w-none bg-white/50 rounded-lg border border-gray-200/50">
+            <div className="p-6 overflow-auto flex-1 min-h-0 prose prose-sm max-w-none bg-white/50 rounded-lg border border-gray-200/50">
               {currentPageMarkdown ? (
                 <div className="animate-fadeIn">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -454,7 +459,7 @@ function EnhancedSegBtn({ active, onClick, children, divider }) {
 
 function EnhancedPane({ title, subtitle, actions, children }) {
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 overflow-hidden transition-all duration-300 hover:shadow-xl">
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 overflow-hidden transition-all duration-300 hover:shadow-xl h-full flex flex-col min-h-0">
       <div className="bg-gradient-to-r from-gray-50/80 to-white/80 px-5 py-4 border-b border-gray-200/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div>
@@ -470,7 +475,7 @@ function EnhancedPane({ title, subtitle, actions, children }) {
           {actions && <div className="flex items-center gap-1">{actions}</div>}
         </div>
       </div>
-      {children}
+      <div className="flex-1 min-h-0">{children}</div>
     </div>
   );
 }

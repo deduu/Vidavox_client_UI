@@ -76,9 +76,9 @@ export default function UniDocParserPage() {
 
   return (
     <SidebarLayout>
-      <div className={`min-h-screen ${THEME.pageBg}`}>
+      <div className={`flex-1 flex flex-col min-h-0 ${THEME.pageBg}`}>
         {/* Header */}
-        <header className="relative overflow-hidden">
+        {/* <header className="relative overflow-hidden">
           <div className="relative z-10 max-w-7xl mx-auto px-4 py-6">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
@@ -91,14 +91,14 @@ export default function UniDocParserPage() {
               </div>
             </div>
           </div>
-        </header>
+        </header> */}
 
         {/* Main Content */}
-        <main className="flex items-center justify-between">
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 items-stretch">
+        <main className="flex-1 min-h-0 h-full flex flex-col">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 flex-1 min-h-0 items-stretch">
             {/* Left Panel: Upload & Configure */}
             {!viewerFull && (
-              <div className="xl:col-span-1">
+              <div className="xl:col-span-1 h-full min-h-0 flex flex-col">
                 <UploadConfigPanel
                   file={file}
                   folderList={folderList}
@@ -113,13 +113,18 @@ export default function UniDocParserPage() {
                   onStartExtraction={handleExtractionStart}
                   onReset={resetSession}
                   maxFileSizeMB={MAX_FILE_SIZE_MB}
+                  className="h-full"
                 />
               </div>
             )}
 
             {/* Right Panel: Results or Help */}
             {/* Right Panel: Always show ResultsViewer */}
-            <div className={viewerFull ? "xl:col-span-4" : "xl:col-span-3"}>
+            <div
+              className={`${
+                viewerFull ? "xl:col-span-4" : "xl:col-span-3"
+              } h-full min-h-0 flex flex-col`}
+            >
               <ResultsViewer
                 file={file}
                 result={result}
@@ -129,6 +134,7 @@ export default function UniDocParserPage() {
                 onTabChange={setActiveTab}
                 isFullscreen={viewerFull}
                 onToggleFullscreen={() => setViewerFull((v) => !v)}
+                className="h-full"
               />
             </div>
           </div>

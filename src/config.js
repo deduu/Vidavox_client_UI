@@ -4,4 +4,7 @@
 
 export const API_ROOT = "http://localhost:8002"; // ← Set backend address directly
 export const API_VERSION = "/v1"; // Or "" if no prefix
-export const API_BASE_URL = `${API_ROOT}${API_VERSION}`;
+// export const API_BASE_URL = `${API_ROOT}${API_VERSION}`;
+// src/config.js
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// or for CRA: process.env.REACT_APP_API_BASE_URL

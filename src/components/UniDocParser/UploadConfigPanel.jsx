@@ -7,6 +7,7 @@ import FileDropZone from "./FileDropZone";
 import { validateFile } from "../../utils/fileValidation";
 
 export default function UploadConfigPanel({
+  className = "",
   file,
   folderList,
   loadingTree,
@@ -56,7 +57,7 @@ export default function UploadConfigPanel({
 
   return (
     <div
-      className={`${THEME.glass} rounded-xl shadow-sm overflow-hidden h-full flex flex-col min-h-[720px]`}
+      className={`${THEME.glass} rounded-xl shadow-sm h-full flex flex-col overflow-hidden ${className}`}
     >
       {/* Header */}
       <div
@@ -73,7 +74,7 @@ export default function UploadConfigPanel({
         </p>
       </div>
 
-      <div className="p-6 space-y-6 flex-1 flex flex-col">
+      <div className="p-6 space-y-6 flex-1 min-h-0 flex flex-col overflow-auto">
         {/* Destination Picker */}
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -101,20 +102,28 @@ export default function UploadConfigPanel({
           </p>
         </div>
 
-        {/* Session Recovery Notice */}
+        {/* Session Recovery Notice - Enhanced */}
         {isPlaceholderFile && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
             <div className="flex items-center space-x-2">
               <span className="text-blue-500">ℹ️</span>
-              <div>
+              <div className="flex-1">
                 <h3 className="text-sm font-medium text-blue-800">
                   Session Restored
                 </h3>
                 <p className="text-xs text-blue-600 mt-1">
                   File "{file?.name}" was restored from your previous session.
-                  To start a new extraction, please select the file again.
+                  {progress.visible
+                    ? " Processing is continuing in the background."
+                    : " To start a new extraction, please select the file again."}
                 </p>
               </div>
+              {progress.visible && (
+                <div className="flex items-center space-x-1 text-blue-600">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                  <span className="text-xs">Resuming...</span>
+                </div>
+              )}
             </div>
           </div>
         )}

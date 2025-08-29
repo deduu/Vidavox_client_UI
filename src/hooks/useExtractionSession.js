@@ -33,9 +33,9 @@ export function useExtractionSession(destinationId) {
   const [result, setResult] = useState(null);
   const [progress, setProgress] = useState({
     visible: false,
-    pct: 0, // Changed from 'percentage' to 'pct' to match your component
+    pct: 0,
     label: "Uploading...",
-    subLabel: "This may take a few moments", // Changed from 'subtitle' to 'subLabel'
+    subLabel: "This may take a few moments",
   });
   const [error, setError] = useState("");
   const [showViewer, setShowViewer] = useState(false);
@@ -76,24 +76,42 @@ export function useExtractionSession(destinationId) {
     };
   }, [cleanup]);
 
-  // Progress timer management - moved before other useCallback hooks that depend on them
+  // Session persistence helpers
+  const persistProgress = useCallback((progressState) => {
+    try {
+      saveJSON(STORAGE.EXTRACTION_PROGRESS, {
+        ...progressState,
+        lastUpdated: Date.now(),
+      });
+    } catch (err) {
+      console.warn("Failed to persist progress:", err);
+    }
+  }, []);
+
+  // Progress timer management
   const startProgressTimer = useCallback(() => {
     if (progressTimerRef.current) return;
 
     progressTimerRef.current = setInterval(() => {
       if (!isMountedRef.current) return;
-      setProgress((prev) => ({
-        ...prev,
-        pct:
-          prev.pct < MAX_PROGRESS_WITHOUT_COMPLETION
-            ? Math.min(
-                prev.pct + Math.random() * 3 + 1,
-                MAX_PROGRESS_WITHOUT_COMPLETION
-              )
-            : prev.pct,
-      }));
+      setProgress((prev) => {
+        const newProgress = {
+          ...prev,
+          pct:
+            prev.pct < MAX_PROGRESS_WITHOUT_COMPLETION
+              ? Math.min(
+                  prev.pct + Math.random() * 3 + 1,
+                  MAX_PROGRESS_WITHOUT_COMPLETION
+                )
+              : prev.pct,
+        };
+
+        // Persist progress updates
+        persistProgress(newProgress);
+        return newProgress;
+      });
     }, PROGRESS_INCREMENT);
-  }, []);
+  }, [persistProgress]);
 
   const stopProgressTimer = useCallback(() => {
     if (progressTimerRef.current) {
@@ -102,7 +120,6 @@ export function useExtractionSession(destinationId) {
     }
   }, []);
 
-  // Session persistence helpers - moved after timer functions
   const persistExtractionResult = useCallback((data) => {
     try {
       // Save main result
@@ -131,10 +148,13 @@ export function useExtractionSession(destinationId) {
     }
   }, []);
 
-  // Enhanced polling for job status - moved after persistence helpers
+  // Enhanced polling for job status
   const startJobPolling = useCallback(
     (jobId) => {
-      if (resumeTimerRef.current) return;
+      if (resumeTimerRef.current) {
+        clearInterval(resumeTimerRef.current);
+        resumeTimerRef.current = null;
+      }
 
       console.log(`Starting job polling for: ${jobId}`);
 
@@ -184,9 +204,10 @@ export function useExtractionSession(destinationId) {
     [file?.name, stopProgressTimer]
   );
 
-  // Session recovery
+  // Session recovery - FIXED VERSION
   useEffect(() => {
     if (userSelectedNewFileRef.current) return; // user is starting fresh; do not recover now
+
     const recoverSession = async () => {
       try {
         const savedFile = loadJSON(STORAGE.SELECTED_FILE);
@@ -224,38 +245,75 @@ export function useExtractionSession(destinationId) {
             label: "Completed",
             subLabel: "Your file has been processed",
           });
-
-          // Show viewer even without real file since we have results
-          if (savedFile?.name) {
-            setShowViewer(true);
-          }
           return;
         }
 
-        // If we have a running job, resume progress and polling
+        // FIXED: If we have a running job, properly restore progress state
         if (job?.status === "running" && job?.jobId) {
           console.log("Resuming running job:", job.jobId);
           currentJobIdRef.current = job.jobId;
           setShowViewer(true);
 
-          // Calculate elapsed time to estimate progress
+          // Load persisted progress and calculate time-based advancement
+          const savedProgress = loadJSON(STORAGE.EXTRACTION_PROGRESS);
           const elapsed = Date.now() - (job.startedAt || Date.now());
-          const estimatedProgress = Math.min(
-            20 + Math.floor(elapsed / 10000),
-            80
-          );
 
+          let resumeProgress;
+
+          if (savedProgress?.pct && savedProgress.lastUpdated) {
+            // Calculate how much time passed since last update
+            const timeSinceLastUpdate = Date.now() - savedProgress.lastUpdated;
+
+            // Estimate progress advancement during absence (roughly 1% per 3 seconds)
+            const progressAdvancement = Math.floor(timeSinceLastUpdate / 3000);
+
+            // Add the advancement to last known progress, but cap at MAX_PROGRESS_WITHOUT_COMPLETION
+            resumeProgress = Math.min(
+              savedProgress.pct + progressAdvancement,
+              MAX_PROGRESS_WITHOUT_COMPLETION
+            );
+
+            console.log(
+              `Progress advancement: ${
+                savedProgress.pct
+              }% -> ${resumeProgress}% (+${progressAdvancement}% during ${Math.floor(
+                timeSinceLastUpdate / 1000
+              )}s absence)`
+            );
+          } else {
+            // Fallback to time-based calculation from job start
+            resumeProgress = Math.min(
+              20 + Math.floor(elapsed / 10000),
+              MAX_PROGRESS_WITHOUT_COMPLETION
+            );
+            console.log("Using time-based progress:", resumeProgress);
+          }
+
+          // FIXED: Ensure progress is visible and properly set
           setProgress({
             visible: true,
-            pct: estimatedProgress,
+            pct: resumeProgress,
             label: "Processing...",
             subLabel: savedFile?.name
               ? `Extracting content from ${savedFile.name}`
               : "Resuming your extraction",
           });
 
+          // Persist the updated progress immediately
+          persistProgress({
+            visible: true,
+            pct: resumeProgress,
+            label: "Processing...",
+            subLabel: savedFile?.name
+              ? `Extracting content from ${savedFile.name}`
+              : "Resuming your extraction",
+          });
+
+          // FIXED: Start both timers properly
           startProgressTimer();
           startJobPolling(job.jobId);
+
+          return; // Important: return here to prevent other state changes
         }
 
         // If we have a failed job, show the error state
@@ -268,6 +326,18 @@ export function useExtractionSession(destinationId) {
             pct: 0,
             label: "Failed",
             subLabel: "",
+          });
+          return;
+        }
+
+        // FIXED: If we have file metadata but no job, show initial ready state
+        if (savedFile?.name && !job) {
+          setShowViewer(false); // Don't show viewer until extraction starts
+          setProgress({
+            visible: false,
+            pct: 0,
+            label: "Ready",
+            subLabel: "Click 'Start Extraction' to begin",
           });
         }
       } catch (err) {
@@ -283,10 +353,13 @@ export function useExtractionSession(destinationId) {
       }
     };
 
-    recoverSession();
+    // FIXED: Add a small delay to ensure the component is fully mounted
+    setTimeout(() => {
+      recoverSession();
+    }, 100);
   }, [startProgressTimer, startJobPolling]);
 
-  // File selection handler - moved after all utility callbacks
+  // File selection handler
   const handleFileSelect = useCallback(
     (selectedFile, validationError) => {
       if (validationError) {
@@ -302,7 +375,7 @@ export function useExtractionSession(destinationId) {
       );
       userSelectedNewFileRef.current = true;
       setError("");
-      setFile(selectedFile); // Store the original file object directly
+      setFile(selectedFile);
 
       // Generate new selection ID for race condition prevention
       const selectionId = generateSelectionId();
@@ -321,7 +394,6 @@ export function useExtractionSession(destinationId) {
       });
 
       // Only persist file metadata for session recovery, not the actual file data
-      // The file object will be kept in memory during the session
       try {
         const fileMetadata = {
           name: selectedFile.name,
@@ -376,9 +448,9 @@ export function useExtractionSession(destinationId) {
     // Clear previous results
     clearExtractionPersist();
 
-    // Set initial progress state
+    // FIXED: Set initial progress state with visible = true
     setProgress({
-      visible: true,
+      visible: true, // Make sure this is true from the start
       pct: 5,
       label: "Initializing...",
       subLabel: "Preparing your file for processing",
@@ -444,7 +516,7 @@ export function useExtractionSession(destinationId) {
 
       // Use the original file object directly - no reconstruction
       const response = await extractDocument({
-        file, // This is the original File object from the file input
+        file,
         options,
         signal: abortControllerRef.current.signal,
       });
@@ -519,7 +591,7 @@ export function useExtractionSession(destinationId) {
     persistExtractionResult,
   ]);
 
-  // Reset session - moved after file selection handler
+  // Reset session
   const resetSession = useCallback(() => {
     console.log("Resetting session");
     cleanup();
@@ -538,11 +610,13 @@ export function useExtractionSession(destinationId) {
 
     localStorage.removeItem(STORAGE.SELECTED_FILE);
     localStorage.removeItem(STORAGE.EXTRACTION_JOB);
+    localStorage.removeItem(STORAGE.EXTRACTION_PROGRESS); // Clear progress too
     selectionIdRef.current = null;
     currentJobIdRef.current = null;
+    userSelectedNewFileRef.current = false; // FIXED: Reset this flag
   }, [cleanup]);
 
-  // Update extraction options - moved after reset session
+  // Update extraction options
   const updateExtractionOptions = useCallback((updates) => {
     setExtractionOptions((prev) => ({ ...prev, ...updates }));
   }, []);

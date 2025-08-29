@@ -19,7 +19,7 @@ import {
 // SidebarLayout.jsx (top-level of the component file)
 const UNIDOCPARSER_ENABLED = false;
 
-export default function SidebarLayout({ children, bottomSlot }) {
+export default function SidebarLayout({ children, bottomSlot, fit = false }) {
   const [open, setOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { user, logout } = useContext(AuthContext);
@@ -52,7 +52,7 @@ export default function SidebarLayout({ children, bottomSlot }) {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex min-h-[100dvh] bg-gray-50 overflow-hidden">
       {/* Mobile Nav Toggle */}
       <button
         className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-white shadow-lg border"
@@ -231,7 +231,7 @@ export default function SidebarLayout({ children, bottomSlot }) {
     flex-1 flex flex-col
     overflow-y-auto overflow-x-hidden
     md:pl-72
-    min-h-[100dvh]     /* or min-h-screen */
+    min-h-0     /* or min-h-screen */
     bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50
   "
       >

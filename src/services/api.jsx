@@ -1,7 +1,7 @@
 // export const API_URL = "http://35.186.159.2/v1";
 // src/services/api.js (top)
 const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-
+import { API_BASE_URL } from "../config";
 export const API_URL =
   // allow override via env (e.g., staging)
   (import.meta?.env?.VITE_API_BASE_URL &&
@@ -721,36 +721,60 @@ export async function updateApiKeys(keys) {
 
   return await res.json(); // returns { status: "ok", updated_keys: [...] }
 }
+
 export async function extractDocument({ file }) {
   const token = localStorage.getItem("token");
-
   const fd = new FormData();
-  fd.append("file", file); // only what backend expects
-
-  const res = await fetch(`http://127.0.0.1:8010/api/v1/extractpdf`, {
+  fd.append("file", file);
+  console.logger("api: ", API_BASE_URL);
+  const res = await fetch(`${API_BASE_URL}/v1/docparser/extract`, {
     method: "POST",
     headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      Accept: "application/json",
-      // DO NOT set Content-Type here; browser will set proper multipart boundary
+      Authorization: `Bearer ${token}`,
     },
     body: fd,
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // FastAPI errors typically have {detail: ...}
-    throw new Error(data?.detail || data?.message || "Extraction failed");
-  }
+  if (!res.ok) throw new Error(data?.detail || "Extraction failed");
 
-  // Normalize keys so the rest of your UI can use consistent names if you want:
   return {
     message: data.message,
     extraction_result: data.extraction_result,
-    json: data.json_output, // normalized
-    markdown: data.markdown_output, // normalized
+    json: data.json_output,
+    markdown: data.markdown_output,
   };
 }
+// export async function extractDocument({ file }) {
+//   const token = localStorage.getItem("token");
+
+//   const fd = new FormData();
+//   fd.append("file", file); // only what backend expects
+
+//   const res = await fetch(`http://127.0.0.1:8010/api/v1/extractpdf`, {
+//     method: "POST",
+//     headers: {
+//       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+//       Accept: "application/json",
+//       // DO NOT set Content-Type here; browser will set proper multipart boundary
+//     },
+//     body: fd,
+//   });
+
+//   const data = await res.json().catch(() => ({}));
+//   if (!res.ok) {
+//     // FastAPI errors typically have {detail: ...}
+//     throw new Error(data?.detail || data?.message || "Extraction failed");
+//   }
+
+//   // Normalize keys so the rest of your UI can use consistent names if you want:
+//   return {
+//     message: data.message,
+//     extraction_result: data.extraction_result,
+//     json: data.json_output, // normalized
+//     markdown: data.markdown_output, // normalized
+//   };
+// }
 // export async function extractDocument({ file, options = {}, folderId = null }) {
 //   // options: { extract_text, extract_tables, extract_images, page_numbers: number[] }
 //   const token = localStorage.getItem("token");

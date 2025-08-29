@@ -31,6 +31,7 @@ export const STORAGE = {
   EXTRACTION_RESULT: "unidoc_extraction_result",
   MARKDOWN_TEXT: "unidoc_md",
   JSON_TEXT: "unidoc_json",
+  EXTRACTION_PROGRESS: "unidoc_extraction_progress",
 };
 
 // ---- Generic helpers ----
@@ -63,6 +64,7 @@ export function clearExtractionPersist() {
     localStorage.removeItem(STORAGE.SELECTED_FILE);
     localStorage.removeItem(STORAGE.JSON_TEXT);
     localStorage.removeItem(STORAGE.MARKDOWN_TEXT);
+    localStorage.removeItem(STORAGE.EXTRACTION_PROGRESS);
   } catch (e) {
     console.warn("LS cleanup failed:", e);
   }
