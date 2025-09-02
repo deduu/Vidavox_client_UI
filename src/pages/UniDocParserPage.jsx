@@ -77,22 +77,6 @@ export default function UniDocParserPage() {
   return (
     <SidebarLayout>
       <div className={`flex-1 flex flex-col min-h-0 ${THEME.pageBg}`}>
-        {/* Header */}
-        {/* <header className="relative overflow-hidden">
-          <div className="relative z-10 max-w-7xl mx-auto px-4 py-6">
-            <div className="flex justify-between items-center">
-              <div className="space-y-1">
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  Universal Document Parser
-                </h1>
-                <p className="text-lg text-gray-600 font-light">
-                  Transform your documents with AI-powered extraction
-                </p>
-              </div>
-            </div>
-          </div>
-        </header> */}
-
         {/* Main Content */}
         <main className="flex-1 min-h-0 h-full flex flex-col">
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 flex-1 min-h-0 items-stretch">
