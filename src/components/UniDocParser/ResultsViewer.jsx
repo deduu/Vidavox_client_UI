@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useContext } from "react";
+import { AuthContext } from "../../contexts/AuthContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { THEME } from "../../constants/theme";
@@ -11,15 +12,23 @@ import {
 } from "../../utils/extraction";
 import { downloadFile } from "../../utils/download";
 import { STORAGE, loadJSON, saveJSON } from "../../utils/persist";
-import PageAnnotator from "./PageAnnotator"; // adjust path if needed
-/**
- * ENHANCED RESULTS VIEWER — Beautiful, professional UI with smooth animations
- * - Enhanced visual hierarchy with better spacing and typography
- * - Smooth transitions and hover effects
- * - Modern glass morphism and gradient accents
- * - Improved accessibility and interaction feedback
- * - Professional color palette and shadows
- */
+import PageAnnotator from "./PageAnnotator";
+
+// point to your *app* API, not the extractor
+const API_BASE = import.meta?.env?.VITE_APP_API_BASE || "http://localhost:8005";
+
+// Updated toAbs function to handle authentication
+const toAbs = (url, authHeaders = {}) => {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+
+  const baseUrl = `${API_BASE}/v1/docparser${
+    url.startsWith("/") ? "" : "/"
+  }${url}`;
+
+  return baseUrl;
+};
+const EMPTY_HEADERS = Object.freeze({});
 export default function ResultsViewer({
   file,
   result,
@@ -30,8 +39,10 @@ export default function ResultsViewer({
   isFullscreen = false,
   onToggleFullscreen = () => {},
   className = "",
+  userHeaders,
 }) {
   const { copyToClipboard } = useClipboard();
+  const { user, token, getAuthHeaders } = useContext(AuthContext);
 
   // Page navigation state
   const [activePage, setActivePage] = useState(0);
@@ -42,7 +53,18 @@ export default function ResultsViewer({
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
+  // base headers only change when the token changes
+  const baseHeaders = useMemo(() => {
+    return token ? { Authorization: `Bearer ${token}` } : EMPTY_HEADERS;
+  }, [token]);
 
+  const extraHeaders = userHeaders ?? EMPTY_HEADERS;
+
+  // Only re-create when the *contents* change
+  const authHeaders = useMemo(() => {
+    // Don't set Content-Type for GET; PageAnnotator adds Accept
+    return { ...baseHeaders, ...extraHeaders };
+  }, [JSON.stringify(baseHeaders), JSON.stringify(extraHeaders)]);
   // Memoized computations
   const stats = useMemo(() => {
     return result?.extraction_result
@@ -70,6 +92,21 @@ export default function ResultsViewer({
     const overridden = { ...current, index: activePage };
     return buildMarkdownFromPages([overridden]);
   }, [current, activePage]);
+
+  // Debug logging for image URLs
+  useEffect(() => {
+    if (!current) return;
+    const rel = current.image_url ?? null;
+    const abs = rel ? toAbs(rel) : null;
+    console.log(
+      "[ResultsViewer] page:",
+      activePage,
+      "image_url:",
+      rel,
+      "abs:",
+      abs
+    );
+  }, [activePage, current?.image_url]);
 
   // Rehydrate persisted state
   useEffect(() => {
@@ -99,11 +136,12 @@ export default function ResultsViewer({
   // Compute applied zoom based on mode
   const appliedZoom = useMemo(() => {
     const currentPage = current;
-    if (!currentPage || !imgSize.w || !imgSize.h || !containerWidth)
+    if (!currentPage || !imgSize.w || !imgSize.h || !containerWidth) {
       return zoom;
+    }
     if (mode === "fit-width") return containerWidth / imgSize.w;
     if (mode === "fit-page") {
-      const paneHeight = 560;
+      const paneHeight = 560; // keep in sync with PageAnnotator height
       const zw = containerWidth / imgSize.w;
       const zh = paneHeight / imgSize.h;
       return Math.min(zw, zh);
@@ -111,6 +149,7 @@ export default function ResultsViewer({
     return zoom;
   }, [mode, zoom, containerWidth, imgSize, current]);
 
+  // Prepare auth headers for PageAnnotator
   // Actions with enhanced feedback
   const handleJsonDownload = () => {
     if (!jsonText) return;
@@ -290,41 +329,38 @@ export default function ResultsViewer({
             }
             subtitle="Source PDF page"
           >
-            <PageAnnotator
-              imageBase64={current.image}
-              elements={current.elements || []}
-              showBoxes={true}
-              your
-              toggle
-              state
-              visibleTypes={["text", "table", "image"]}
-              yOrigin="top-left" // switch to "bottom-left" if your bboxes are PDF coords
-              // onSelect={(idx, el) => setSelectedIdx(idx)}
-              // selectedIdx={selectedIdx}
-            />
-            {/* <div
+            {/* Attach the containerRef here so ResizeObserver can compute fit-width */}
+            <div
               ref={containerRef}
               className="bg-gradient-to-br from-gray-100 to-gray-50 overflow-auto h-[60vh] rounded-lg border border-gray-200/50"
             >
-              <div style={{ width: `${appliedZoom * 100}%`, minWidth: "100%" }}>
-                <img
-                  src={`data:image/jpeg;base64,${current.image}`}
-                  alt={`PDF page ${activePage + 1}`}
-                  className="block w-full h-auto select-none transition-transform duration-200 hover:scale-[1.01]"
-                  draggable={false}
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    setImgSize({
-                      w: img.naturalWidth || 0,
-                      h: img.naturalHeight || 0,
-                    });
-                  }}
-                />
-              </div>
-            </div> */}
+              {!current ? (
+                <div className="h-full flex items-center justify-center text-gray-500">
+                  No pages available
+                </div>
+              ) : (
+                <div
+                  style={{ width: `${appliedZoom * 100}%`, minWidth: "100%" }}
+                >
+                  <PageAnnotator
+                    key={`${activePage}-${current.image_url}`} // Force remount on page/URL change
+                    imageUrl={
+                      current.image_url ? toAbs(current.image_url) : null
+                    }
+                    imageBase64={current?.image}
+                    elements={current?.elements || []}
+                    showBoxes
+                    visibleTypes={["text", "table", "image"]}
+                    yOrigin="top-left"
+                    onImageLoadNaturalSize={(w, h) => setImgSize({ w, h })}
+                    authHeaders={authHeaders}
+                  />
+                </div>
+              )}
+            </div>
           </EnhancedPane>
 
-          {/* RIGHT: Enhanced Markdown Preview */}
+          {/* RIGHT: Markdown Preview */}
           <EnhancedPane
             title={
               <>

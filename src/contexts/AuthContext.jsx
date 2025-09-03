@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.jsx
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useCallback } from "react";
 import {
   login as apiLogin,
   register as apiRegister,
@@ -11,18 +11,21 @@ export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  // NEW: loading = “we’re checking localStorage → backend”
+  const [token, setToken] = useState(null); // Add token to state
+  // NEW: loading = "we're checking localStorage → backend"
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      setToken(storedToken); // Set token in state
       fetchCurrentUser()
         .then((u) => setUser(u))
         .catch(() => {
           // if token invalid/expired, drop it
           localStorage.removeItem("token");
+          setToken(null);
         })
         .finally(() => {
           setLoading(false);
@@ -36,6 +39,7 @@ export function AuthProvider({ children }) {
   const login = async (creds) => {
     const { access_token } = await apiLogin(creds);
     localStorage.setItem("token", access_token);
+    setToken(access_token); // Update state
     const me = await fetchCurrentUser();
     setUser(me);
     navigate("/chat");
@@ -48,13 +52,41 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem("token");
+    setToken(null); // Clear token from state
     setUser(null);
     navigate("/");
   };
 
+  // Get auth headers using the token from state
+  const getAuthHeaders = useCallback(
+    (includeContentType = true) => {
+      const token = localStorage.getItem("token");
+      if (!token) return {};
+
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+
+      if (includeContentType) {
+        headers["Content-Type"] = "application/json";
+      }
+
+      return headers;
+    },
+    [token]
+  );
+
+  const contextValue = {
+    user,
+    token,
+    loading,
+    login,
+    register,
+    logout,
+    getAuthHeaders,
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
 }
