@@ -1,5 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
+/**
+ * PageAnnotator — proxy-ready, simplified
+ *
+ * Assumptions:
+ * - Your frontend hits your OWN backend proxy for images, so no per-request auth headers are needed.
+ * - If `imageBase64` is provided, it takes precedence over `imageUrl`.
+ * - Boxes are drawn based on image-native coordinates [x1, y1, x2, y2].
+ * - `yOrigin` controls coordinate origin: "top-left" (DOM-style) or "bottom-left" (PDF-style).
+ */
 export default function PageAnnotator({
   imageUrl,
   imageBase64,
@@ -10,12 +25,11 @@ export default function PageAnnotator({
   onSelect,
   selectedIdx = null,
   onImageLoadNaturalSize,
-  authHeaders = {},
+  coordWidth,
+  coordHeight,
 }) {
   const wrapperRef = useRef(null);
   const imgRef = useRef(null);
-  const objectUrlRef = useRef(null); // track blob URL for cleanup
-  const fetchAbortRef = useRef(null); // abort in-flight fetches
 
   const [natural, setNatural] = useState({ w: 0, h: 0 });
   const [rendered, setRendered] = useState({ w: 0, h: 0 });
@@ -23,147 +37,163 @@ export default function PageAnnotator({
   const [imageError, setImageError] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // ALL useMemo calls must be at the top level, before any conditional logic
+  // ---- Derivations ----
   const typesSet = useMemo(() => {
     if (!visibleTypes) return null;
     return visibleTypes instanceof Set ? visibleTypes : new Set(visibleTypes);
   }, [visibleTypes]);
-
-  const scale = useMemo(() => {
-    if (!natural.w || !natural.h || !rendered.w || !rendered.h) {
-      return { x: 1, y: 1 };
-    }
-    return { x: rendered.w / natural.w, y: rendered.h / natural.h };
-  }, [natural, rendered]);
 
   const filtered = useMemo(() => {
     if (!elements?.length) return [];
     if (!typesSet) return elements;
     return elements.filter((e) => typesSet.has(e.type));
   }, [elements, typesSet]);
+  // derive bbox coordinate space (fallback to natural)
+  const coordSpace = useMemo(() => {
+    let w = Number(coordWidth) || 0;
+    let h = Number(coordHeight) || 0;
+    if ((!w || !h) && filtered.length) {
+      let maxX = 0,
+        maxY = 0;
+      for (const el of filtered) {
+        const [, , x2 = 0, y2 = 0] = el.bbox || [];
+        if (x2 > maxX) maxX = x2;
+        if (y2 > maxY) maxY = y2;
+      }
+      w = w || maxX;
+      h = h || maxY;
+    }
+    if (!w || !h) {
+      w = natural.w;
+      h = natural.h;
+    }
+    return { w, h };
+  }, [coordWidth, coordHeight, natural, filtered]);
 
-  // ALL useEffect calls must be at the top level, before any conditional logic
-  // ResizeObserver effect
-  useEffect(() => {
-    const img = imgRef.current;
-    if (!img) return;
-    const ro = new ResizeObserver(() => {
-      setRendered({ w: img.clientWidth || 0, h: img.clientHeight || 0 });
+  const scale = useMemo(() => {
+    if (!coordSpace.w || !coordSpace.h || !rendered.w || !rendered.h) {
+      return { x: 1, y: 1 };
+    }
+    return {
+      x: rendered.w / coordSpace.w,
+      y: rendered.h / coordSpace.h,
+    };
+  }, [coordSpace, rendered]);
+  const boxes = useMemo(() => {
+    return filtered.map((el) => {
+      const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = el.bbox || [];
+      const left = x1 * scale.x;
+      const top =
+        yOrigin === "bottom-left"
+          ? (coordSpace.h - y2) * scale.y
+          : y1 * scale.y;
+      const width = Math.max((x2 - x1) * scale.x, 0);
+      const height = Math.max((y2 - y1) * scale.y, 0);
+      return { ...el, left, top, width, height };
     });
-    ro.observe(img);
-    return () => ro.disconnect();
-  }, []);
-
-  const authKey = useMemo(
-    () => JSON.stringify(authHeaders || {}),
-    [authHeaders]
-  );
-  // Image loading effect
+  }, [filtered, scale, coordSpace.h, yOrigin]);
   useEffect(() => {
-    // cleanup previous blob URL & fetch
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
-    if (fetchAbortRef.current) {
-      fetchAbortRef.current.abort();
-      fetchAbortRef.current = null;
-    }
+    console.log(
+      "[Annotator] natural=",
+      natural,
+      "coordSpace=",
+      coordSpace,
+      "rendered=",
+      rendered,
+      "scale=",
+      scale
+    );
+  }, [natural, coordSpace, rendered, scale]);
 
+  // useEffect(() => {
+  //   if (!imageSrc || !natural.w || !rendered.w) return;
+  //   console.log(
+  //     "[Annotator] natural=",
+  //     natural,
+  //     "rendered=",
+  //     rendered,
+  //     "scale=",
+  //     scale
+  //   );
+  //   filtered.slice(0, 5).forEach((el) => {
+  //     console.log(`[Annotator] el idx=${el.idx} bbox=${el.bbox}`, {
+  //       topCalc:
+  //         yOrigin === "bottom-left"
+  //           ? (natural.h - el.bbox[3]) * scale.y
+  //           : el.bbox[1] * scale.y,
+  //       leftCalc: el.bbox[0] * scale.x,
+  //       widthCalc: (el.bbox[2] - el.bbox[0]) * scale.x,
+  //       heightCalc: (el.bbox[3] - el.bbox[1]) * scale.y,
+  //     });
+  //   });
+  // }, [natural, rendered, scale, filtered, yOrigin, imageSrc]);
+
+  // ---- Image source decision (proxy-friendly) ----
+  useEffect(() => {
     setImageError(false);
-    setImageSrc(null);
 
-    // Prefer base64 if provided
     if (imageBase64) {
+      // data URL (takes precedence)
       const src = imageBase64.startsWith("data:")
         ? imageBase64
         : `data:image/jpeg;base64,${imageBase64}`;
       setImageSrc(src);
+      setLoading(true); // wait for onLoad
       return;
     }
 
-    if (!imageUrl) {
+    if (imageUrl) {
+      setImageSrc(imageUrl); // just let the <img> load it directly (backend proxy handles auth)
+      setLoading(true);
       return;
     }
 
-    const controller = new AbortController();
-    fetchAbortRef.current = controller;
+    setImageSrc(null);
+    setLoading(false);
+  }, [imageUrl, imageBase64]);
 
-    const load = async () => {
-      try {
-        setLoading(true);
+  // ---- Measure rendered size on first load & whenever src changes ----
+  useLayoutEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    setRendered({ w: img.clientWidth || 0, h: img.clientHeight || 0 });
+  }, [imageSrc]);
 
-        // If we have auth headers, fetch as blob; otherwise use direct URL
-        if (Object.keys(authHeaders).length > 0) {
-          const response = await fetch(imageUrl, {
-            headers: {
-              ...authHeaders,
-              // Do not set Content-Type on GET
-              Accept: "image/jpeg,image/png,image/*",
-            },
-            signal: controller.signal,
-          });
-
-          if (!response.ok) {
-            throw new Error(
-              `Failed to load image: ${response.status} ${response.statusText}`
-            );
-          }
-
-          const blob = await response.blob();
-          const objectUrl = URL.createObjectURL(blob);
-          objectUrlRef.current = objectUrl;
-          setImageSrc(objectUrl);
-        } else {
-          setImageSrc(imageUrl);
-        }
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          console.error("Error loading image:", err);
-          setImageError(true);
-          setImageSrc(null);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-
-    // Cleanup
+  // ---- Track resizes smoothly ----
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        setRendered({ w: img.clientWidth || 0, h: img.clientHeight || 0 });
+      });
+    });
+    ro.observe(img);
     return () => {
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-      if (fetchAbortRef.current) {
-        fetchAbortRef.current.abort();
-        fetchAbortRef.current = null;
-      }
+      ro.disconnect();
+      cancelAnimationFrame(raf);
     };
-  }, [imageUrl, imageBase64, authKey]);
+  }, []);
 
-  // Handler functions
+  // ---- Handlers ----
   const handleImgLoad = (e) => {
     const img = e.currentTarget;
     const w = img.naturalWidth || 0;
     const h = img.naturalHeight || 0;
     setNatural({ w, h });
     setRendered({ w: img.clientWidth || 0, h: img.clientHeight || 0 });
+    setLoading(false);
     onImageLoadNaturalSize?.(w, h);
   };
 
-  // NOW we can do conditional rendering after ALL hooks have been called
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg">
-        <div className="text-center">
-          <div className="animate-spin text-4xl mb-2">⏳</div>
-          <p className="text-gray-600">Loading image...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleImgError = () => {
+    setImageError(true);
+    setLoading(false);
+  };
+
+  // ---- UI states ----
 
   if (imageError) {
     return (
@@ -172,7 +202,7 @@ export default function PageAnnotator({
           <div className="text-4xl mb-2">🚫</div>
           <p className="text-gray-600">Failed to load image</p>
           <p className="text-gray-400 text-sm mt-1">
-            Check authentication or network connection
+            Try refreshing or check your login.
           </p>
         </div>
       </div>
@@ -204,24 +234,19 @@ export default function PageAnnotator({
           draggable={false}
           crossOrigin="anonymous"
           onLoad={handleImgLoad}
-          onError={() => setImageError(true)}
+          onError={handleImgError}
         />
-
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="animate-spin text-4xl mb-2">⏳</div>
+          </div>
+        )}
         {showBoxes && rendered.w > 0 && rendered.h > 0 && (
           <div
             className="absolute inset-0 pointer-events-none"
             style={{ width: rendered.w, height: rendered.h }}
           >
-            {filtered.map((el) => {
-              const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = el.bbox || [];
-              const top =
-                yOrigin === "bottom-left"
-                  ? (natural.h - y2) * scale.y
-                  : y1 * scale.y;
-              const left = x1 * scale.x;
-              const width = Math.max((x2 - x1) * scale.x, 0);
-              const height = Math.max((y2 - y1) * scale.y, 0);
-
+            {boxes.map((el) => {
               const colorClass =
                 el.type === "table"
                   ? "ring-2 ring-purple-500/70 bg-purple-500/10"
@@ -239,10 +264,10 @@ export default function PageAnnotator({
                   key={el.idx}
                   className={`absolute rounded-md ${colorClass} ${selectedClass}`}
                   style={{
-                    left,
-                    top,
-                    width,
-                    height,
+                    left: el.left,
+                    top: el.top,
+                    width: el.width,
+                    height: el.height,
                     pointerEvents: onSelect ? "auto" : "none",
                   }}
                   title={`${el.type}${

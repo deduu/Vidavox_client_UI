@@ -93,6 +93,20 @@ export default function ResultsViewer({
     return buildMarkdownFromPages([overridden]);
   }, [current, activePage]);
 
+  useEffect(() => {
+    if (!current) return;
+    const rel = current.image_url ?? null;
+    const abs = rel ? toAbs(rel) : null;
+    console.log(
+      "[ResultsViewer] activePage=",
+      activePage,
+      "rel=",
+      rel,
+      "abs=",
+      abs
+    );
+  }, [activePage, current?.image_url]);
+
   // Debug logging for image URLs
   useEffect(() => {
     if (!current) return;
@@ -318,7 +332,7 @@ export default function ResultsViewer({
 
       {/* ENHANCED CONTENT */}
       <div className="flex-1 min-h-0 p-6 overflow-hidden bg-gradient-to-br from-gray-50/30 to-white/50">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0 h-full">
           {/* LEFT: Enhanced Original PDF Page */}
           <EnhancedPane
             title={
@@ -332,7 +346,7 @@ export default function ResultsViewer({
             {/* Attach the containerRef here so ResizeObserver can compute fit-width */}
             <div
               ref={containerRef}
-              className="bg-gradient-to-br from-gray-100 to-gray-50 overflow-auto h-[60vh] rounded-lg border border-gray-200/50"
+              className="bg-gradient-to-br from-gray-100 to-gray-50 overflow-auto flex-1 min-h-0 h-full rounded-lg border border-gray-200/50"
             >
               {!current ? (
                 <div className="h-full flex items-center justify-center text-gray-500">
@@ -343,7 +357,6 @@ export default function ResultsViewer({
                   style={{ width: `${appliedZoom * 100}%`, minWidth: "100%" }}
                 >
                   <PageAnnotator
-                    key={`${activePage}-${current.image_url}`} // Force remount on page/URL change
                     imageUrl={
                       current.image_url ? toAbs(current.image_url) : null
                     }
@@ -351,9 +364,11 @@ export default function ResultsViewer({
                     elements={current?.elements || []}
                     showBoxes
                     visibleTypes={["text", "table", "image"]}
-                    yOrigin="top-left"
+                    // NEW:
+                    yOrigin={current?.y_origin || "top-left"}
+                    coordWidth={current?.coord_width}
+                    coordHeight={current?.coord_height}
                     onImageLoadNaturalSize={(w, h) => setImgSize({ w, h })}
-                    authHeaders={authHeaders}
                   />
                 </div>
               )}
@@ -406,7 +421,7 @@ export default function ResultsViewer({
               </div>
             }
           >
-            <div className="p-6 overflow-auto flex-1 min-h-0 prose prose-sm max-w-none bg-white/50 rounded-lg border border-gray-200/50">
+            <div className="p-6 overflow-auto flex-1 min-h-0 h-full prose prose-sm max-w-none bg-white/50 rounded-lg border border-gray-200/50">
               {currentPageMarkdown ? (
                 <div className="animate-fadeIn">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
