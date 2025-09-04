@@ -1,4 +1,11 @@
-import React, { useState, useMemo, useRef, useEffect, useContext } from "react";
+import React, {
+  useState,
+  useMemo,
+  useRef,
+  useEffect,
+  useContext,
+  useCallback,
+} from "react";
 import { AuthContext } from "../../contexts/AuthContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -28,7 +35,9 @@ const toAbs = (url, authHeaders = {}) => {
 
   return baseUrl;
 };
+
 const EMPTY_HEADERS = Object.freeze({});
+
 export default function ResultsViewer({
   file,
   result,
@@ -54,6 +63,11 @@ export default function ResultsViewer({
   const [containerWidth, setContainerWidth] = useState(0);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
   const [showBoxes, setShowBoxes] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Enhanced state for better UX
+  const [selectedElement, setSelectedElement] = useState(null);
+  const [viewMode, setViewMode] = useState("split"); // split, pdf-only, content-only
 
   // base headers only change when the token changes
   const baseHeaders = useMemo(() => {
@@ -67,6 +81,7 @@ export default function ResultsViewer({
     // Don't set Content-Type for GET; PageAnnotator adds Accept
     return { ...baseHeaders, ...extraHeaders };
   }, [JSON.stringify(baseHeaders), JSON.stringify(extraHeaders)]);
+
   // Memoized computations
   const stats = useMemo(() => {
     return result?.extraction_result
@@ -95,34 +110,13 @@ export default function ResultsViewer({
     return buildMarkdownFromPages([overridden]);
   }, [current, activePage]);
 
-  useEffect(() => {
-    if (!current) return;
-    const rel = current.image_url ?? null;
-    const abs = rel ? toAbs(rel) : null;
-    console.log(
-      "[ResultsViewer] activePage=",
-      activePage,
-      "rel=",
-      rel,
-      "abs=",
-      abs
-    );
-  }, [activePage, current?.image_url]);
-
-  // Debug logging for image URLs
-  useEffect(() => {
-    if (!current) return;
-    const rel = current.image_url ?? null;
-    const abs = rel ? toAbs(rel) : null;
-    console.log(
-      "[ResultsViewer] page:",
-      activePage,
-      "image_url:",
-      rel,
-      "abs:",
-      abs
-    );
-  }, [activePage, current?.image_url]);
+  // Enhanced container width tracking with debouncing
+  const updateContainerWidth = useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setContainerWidth(rect.width);
+    }
+  }, []);
 
   // Rehydrate persisted state
   useEffect(() => {
@@ -130,24 +124,81 @@ export default function ResultsViewer({
     if (saved?.page != null) setActivePage(saved.page);
     if (saved?.zoom != null) setZoom(saved.zoom);
     if (saved?.mode) setMode(saved.mode);
+    if (saved?.viewMode) setViewMode(saved.viewMode);
   }, []);
 
   // Persist state changes
   useEffect(() => {
-    saveJSON(STORAGE.PAGE_VIEWER, { page: activePage, zoom, mode });
-  }, [activePage, zoom, mode]);
+    saveJSON(STORAGE.PAGE_VIEWER, { page: activePage, zoom, mode, viewMode });
+  }, [activePage, zoom, mode, viewMode]);
 
-  // Track container width for zoom calculations
+  // Enhanced container width tracking with proper cleanup
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const r = entries[0]?.contentRect;
-      if (r?.width) setContainerWidth(r.width);
-    });
+
+    let timeoutId;
+    const debouncedUpdate = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(updateContainerWidth, 100);
+    };
+
+    const ro = new ResizeObserver(debouncedUpdate);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+
+    // Initial measurement
+    updateContainerWidth();
+
+    // Handle fullscreen changes
+    const handleFullscreenChange = () => {
+      setTimeout(updateContainerWidth, 100);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+
+    // Handle window resize
+    window.addEventListener("resize", debouncedUpdate);
+
+    return () => {
+      ro.disconnect();
+      clearTimeout(timeoutId);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        handleFullscreenChange
+      );
+      document.removeEventListener(
+        "mozfullscreenchange",
+        handleFullscreenChange
+      );
+      document.removeEventListener(
+        "MSFullscreenChange",
+        handleFullscreenChange
+      );
+      window.removeEventListener("resize", debouncedUpdate);
+    };
+  }, [updateContainerWidth]);
+  useEffect(() => {
+    // after the DOM reflows due to view mode change, re-measure
+    const id = requestAnimationFrame(() => updateContainerWidth());
+    const id2 = setTimeout(updateContainerWidth, 120); // double-tap after CSS transitions
+    return () => {
+      cancelAnimationFrame(id);
+      clearTimeout(id2);
+    };
+  }, [viewMode, activeTab]);
+  // Enhanced fullscreen effect
+  useEffect(() => {
+    // Trigger container width recalculation when fullscreen changes
+    const timer = setTimeout(() => {
+      updateContainerWidth();
+    }, 200); // Allow time for fullscreen transition
+
+    return () => clearTimeout(timer);
+  }, [isFullscreen, updateContainerWidth]);
 
   // Compute applied zoom based on mode
   const appliedZoom = useMemo(() => {
@@ -165,32 +216,83 @@ export default function ResultsViewer({
     return zoom;
   }, [mode, zoom, containerWidth, imgSize, current]);
 
-  // Prepare auth headers for PageAnnotator
-  // Actions with enhanced feedback
-  const handleJsonDownload = () => {
+  // Actions with enhanced feedback and loading states
+  const handleJsonDownload = useCallback(() => {
     if (!jsonText) return;
-    const ok = downloadFile(
-      jsonText,
-      `${file?.name || "result"}.json`,
-      "application/json"
-    );
-    if (!ok) alert("Download failed. Please try again.");
-  };
+    setIsLoading(true);
+    try {
+      const ok = downloadFile(
+        jsonText,
+        `${file?.name || "result"}.json`,
+        "application/json"
+      );
+      if (!ok) {
+        throw new Error("Download failed");
+      }
+    } catch (error) {
+      alert("Download failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [jsonText, file?.name]);
 
-  const handleMarkdownDownload = () => {
+  const handleMarkdownDownload = useCallback(() => {
     if (!markdownText) return;
-    const ok = downloadFile(
-      markdownText,
-      `${file?.name || "result"}.md`,
-      "text/markdown"
-    );
-    if (!ok) alert("Download failed. Please try again.");
-  };
+    setIsLoading(true);
+    try {
+      const ok = downloadFile(
+        markdownText,
+        `${file?.name || "result"}.md`,
+        "text/markdown"
+      );
+      if (!ok) {
+        throw new Error("Download failed");
+      }
+    } catch (error) {
+      alert("Download failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [markdownText, file?.name]);
 
-  const handleJsonCopy = () =>
-    copyToClipboard(jsonText, "JSON copied to clipboard!");
-  const handleMarkdownCopy = () =>
-    copyToClipboard(markdownText, "Markdown copied to clipboard!");
+  const handleJsonCopy = useCallback(
+    () => copyToClipboard(jsonText, "JSON copied to clipboard!"),
+    [copyToClipboard, jsonText]
+  );
+
+  const handleMarkdownCopy = useCallback(
+    () => copyToClipboard(markdownText, "Markdown copied to clipboard!"),
+    [copyToClipboard, markdownText]
+  );
+
+  // Enhanced keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+        return;
+
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          setActivePage((p) => Math.max(0, p - 1));
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          setActivePage((p) => Math.min(pages.length - 1, p + 1));
+          break;
+        case "f":
+        case "F":
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            onToggleFullscreen();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pages.length, onToggleFullscreen]);
 
   if (!current) {
     return (
@@ -198,17 +300,39 @@ export default function ResultsViewer({
         <div
           className={`${THEME.glass} h-full flex flex-col items-center justify-center rounded-2xl shadow-xl p-16 text-center backdrop-blur-md border border-white/20`}
         >
-          <div className="text-6xl mb-4 opacity-60">📄</div>
-          <p className="text-gray-500 text-lg font-medium">
-            No pages available
-          </p>
-          <p className="text-gray-400 text-sm mt-2">
+          <div className="relative">
+            <div className="text-6xl mb-4 opacity-60">📄</div>
+            <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs">!</span>
+            </div>
+          </div>
+          <h3 className="text-xl font-semibold text-gray-700 mb-2">
+            No Pages Available
+          </h3>
+          <p className="text-gray-500 text-base mb-4">
             Upload a document to begin extraction
           </p>
+          <div className="flex flex-col gap-2 text-sm text-gray-400">
+            <span>• Supported formats: PDF, DOC, DOCX</span>
+            <span>• Maximum file size: 50MB</span>
+          </div>
         </div>
       </div>
     );
   }
+
+  // Determine grid layout based on view mode
+  const getGridClasses = () => {
+    switch (viewMode) {
+      case "pdf-only":
+        return "grid-cols-1";
+      case "content-only":
+        return "grid-cols-1";
+      case "split":
+      default:
+        return "grid-cols-1 xl:grid-cols-2";
+    }
+  };
 
   return (
     <div
@@ -216,24 +340,33 @@ export default function ResultsViewer({
     >
       {/* ENHANCED HEADER */}
       <div
-        className={`${THEME.softBar} px-6 py-5 border-b border-white/10 bg-gradient-to-r from-blue-50/50 to-purple-50/30`}
+        className={`${THEME.softBar} px-6 py-4 border-b border-white/10 bg-gradient-to-r from-blue-50/50 to-purple-50/30`}
       >
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           {/* File Info with enhanced styling */}
           {file && (
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="text-blue-500 text-3xl p-2 bg-blue-100/50 rounded-xl backdrop-blur">
-                📄
+            <div className="flex items-center gap-4 min-w-0 flex-1">
+              <div className="relative">
+                <div className="text-blue-500 text-3xl p-3 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl backdrop-blur border border-blue-200/50 shadow-sm">
+                  📄
+                </div>
+                {isCompleted && (
+                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white text-xs">✓</span>
+                  </div>
+                )}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h2 className="text-xl font-bold text-gray-800 truncate bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text">
                   {file.name}
                 </h2>
-                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
-                  <span className="font-medium">{formatBytes(file.size)}</span>
-                  <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                  <span className="font-medium">{stats.pages} pages</span>
-                  <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1 flex-wrap">
+                  <span className="font-medium px-2 py-1 bg-gray-100 rounded-md">
+                    {formatBytes(file.size)}
+                  </span>
+                  <span className="font-medium px-2 py-1 bg-blue-100 rounded-md text-blue-700">
+                    {stats.pages} pages
+                  </span>
                   <StatusPill isCompleted={isCompleted} />
                 </div>
               </div>
@@ -241,16 +374,35 @@ export default function ResultsViewer({
           )}
 
           {/* Enhanced right side controls */}
-          <div className="flex items-center gap-4">
-            <StatChip
-              icon="⏱️"
-              label="Processing time"
-              value={stats.time || "—"}
+          <div className="flex items-center gap-3 flex-wrap">
+            <StatChip icon="⏱️" label="Processing" value={stats.time || "—"} />
+            {/* <StatChip
+              icon="🔤"
+              label="Text blocks"
+              value={stats.textBlocks || "0"}
             />
-            <div className="w-px h-8 bg-gray-200"></div>
+            <StatChip icon="📊" label="Tables" value={stats.tables || "0"} /> */}
+
+            <div className="w-px h-8 bg-gray-200/50"></div>
 
             <EnhancedIconOnly
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              title="Keyboard shortcuts (← → for navigation, Ctrl+F for fullscreen)"
+              ariaLabel="Show keyboard shortcuts"
+              onClick={() =>
+                alert(
+                  "Keyboard shortcuts:\n← → : Navigate pages\nCtrl+F : Toggle fullscreen"
+                )
+              }
+            >
+              ⌨️
+            </EnhancedIconOnly>
+
+            <EnhancedIconOnly
+              title={
+                isFullscreen
+                  ? "Exit fullscreen (Ctrl+F)"
+                  : "Enter fullscreen (Ctrl+F)"
+              }
               ariaLabel={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               onClick={onToggleFullscreen}
             >
@@ -261,199 +413,270 @@ export default function ResultsViewer({
       </div>
 
       {/* ENHANCED TOOLBAR */}
-      <div className="px-6 py-4 bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur border-b border-white/20">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="px-6 py-4 bg-gradient-to-r from-white/90 to-gray-50/80 backdrop-blur border-b border-white/20">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           {/* Enhanced Page Navigation */}
-          <div className="flex items-center gap-3">
-            <EnhancedToolbarBtn
-              title="Previous page"
-              onClick={() => setActivePage((p) => Math.max(0, p - 1))}
-              disabled={activePage === 0}
-            >
-              ◀️
-            </EnhancedToolbarBtn>
-            <div className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg text-sm font-semibold shadow-md">
-              Page {activePage + 1} of {pages.length}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <EnhancedToolbarBtn
+                title="Previous page (←)"
+                onClick={() => setActivePage((p) => Math.max(0, p - 1))}
+                disabled={activePage === 0}
+                icon="◀️"
+              />
+              <div className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-semibold shadow-lg border border-blue-400">
+                <span className="hidden sm:inline">Page </span>
+                {activePage + 1} / {pages.length}
+              </div>
+              <EnhancedToolbarBtn
+                title="Next page (→)"
+                onClick={() =>
+                  setActivePage((p) => Math.min(pages.length - 1, p + 1))
+                }
+                disabled={activePage === pages.length - 1}
+                icon="▶️"
+              />
             </div>
-            <EnhancedToolbarBtn
-              title="Next page"
-              onClick={() =>
-                setActivePage((p) => Math.min(pages.length - 1, p + 1))
-              }
-              disabled={activePage === pages.length - 1}
-            >
-              ▶️
-            </EnhancedToolbarBtn>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-sm font-medium text-gray-600 hidden sm:inline">
+                View:
+              </span>
+              <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
+                <ViewModeButton
+                  active={viewMode === "split"}
+                  onClick={() => setViewMode("split")}
+                  title="Split view"
+                  icon="⚌"
+                />
+                <ViewModeButton
+                  active={viewMode === "pdf-only"}
+                  onClick={() => setViewMode("pdf-only")}
+                  title="PDF only"
+                  icon="📄"
+                  divider
+                />
+                <ViewModeButton
+                  active={viewMode === "content-only"}
+                  onClick={() => setViewMode("content-only")}
+                  title="Content only"
+                  icon="📝"
+                  divider
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Enhanced View Controls */}
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-600">
-              Display mode
-            </span>
-            <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
-              <EnhancedSegBtn
-                active={mode === "fit-width"}
-                onClick={() => setMode("fit-width")}
-              >
-                Fit Width
-              </EnhancedSegBtn>
-              <EnhancedSegBtn
-                active={mode === "fit-page"}
-                onClick={() => setMode("fit-page")}
-                divider
-              >
-                Fit Page
-              </EnhancedSegBtn>
-              <EnhancedSegBtn
-                active={mode === "manual"}
-                onClick={() => setMode("manual")}
-                divider
-              >
-                Manual
-              </EnhancedSegBtn>
+          {/* Enhanced Display Controls */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-600 hidden sm:inline">
+                Display:
+              </span>
+              <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
+                <EnhancedSegBtn
+                  active={mode === "fit-width"}
+                  onClick={() => setMode("fit-width")}
+                  title="Fit to width"
+                >
+                  📐
+                </EnhancedSegBtn>
+                <EnhancedSegBtn
+                  active={mode === "fit-page"}
+                  onClick={() => setMode("fit-page")}
+                  title="Fit to page"
+                  divider
+                >
+                  🖼️
+                </EnhancedSegBtn>
+                <EnhancedSegBtn
+                  active={mode === "manual"}
+                  onClick={() => setMode("manual")}
+                  title="Manual zoom"
+                  divider
+                >
+                  🔍
+                </EnhancedSegBtn>
+              </div>
             </div>
+
             {mode === "manual" && (
               <select
                 value={zoom}
                 onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="ml-2 border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium bg-white shadow-sm hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium bg-white shadow-sm hover:border-gray-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               >
-                {[0.5, 0.75, 1, 1.25, 1.5, 2].map((z) => (
+                {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map((z) => (
                   <option key={z} value={z}>
                     {z * 100}%
                   </option>
                 ))}
               </select>
             )}
-            <span className="text-xs text-gray-500 font-mono ml-2 px-2 py-1 bg-gray-100 rounded-md">
-              {Math.round(appliedZoom * 100)}%
-            </span>
+
+            <div className="flex items-center gap-2 ml-2">
+              <span className="text-xs text-gray-500 font-mono px-2 py-1 bg-gray-100 rounded-lg">
+                {Math.round(appliedZoom * 100)}%
+              </span>
+              <EnhancedToggle
+                checked={showBoxes}
+                onChange={setShowBoxes}
+                label="Annotations"
+                title="Toggle annotation boxes"
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {/* ENHANCED CONTENT */}
       <div className="flex-1 min-h-0 p-6 overflow-hidden bg-gradient-to-br from-gray-50/30 to-white/50">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0 h-full">
+        <div className={`grid ${getGridClasses()} gap-6 flex-1 min-h-0 h-full`}>
           {/* LEFT: Enhanced Original PDF Page */}
-          <EnhancedPane
-            title={
-              <>
-                <span className="mr-3 text-xl">📄</span>
-                <span className="font-semibold">Original Document</span>
-              </>
-            }
-            subtitle="Source PDF page"
-            actions={
-              <div className="flex items-center gap-2">
-                <EnhancedActionBtn
-                  title="Show/hide boxes"
-                  ariaLabel="Show/hide boxes"
-                  onClick={() => setShowBoxes((s) => !s)}
-                  variant="default"
-                >
-                  {showBoxes ? "👁️" : "🚫"}
-                </EnhancedActionBtn>
-              </div>
-            }
-          >
-            {/* Attach the containerRef here so ResizeObserver can compute fit-width */}
-            <div
-              ref={containerRef}
-              className="bg-gradient-to-br from-gray-100 to-gray-50 overflow-auto flex-1 min-h-0 h-full rounded-lg border border-gray-200/50"
+          {(viewMode === "split" || viewMode === "pdf-only") && (
+            <EnhancedPane
+              title={
+                <>
+                  <span className="mr-3 text-xl">📄</span>
+                  <span className="font-semibold">Original Document</span>
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    Page {activePage + 1}
+                  </span>
+                </>
+              }
+              subtitle="Source document with annotations"
             >
-              {!current ? (
-                <div className="h-full flex items-center justify-center text-gray-500">
-                  No pages available
-                </div>
-              ) : (
-                <div
-                  style={{ width: `${appliedZoom * 100}%`, minWidth: "100%" }}
-                >
-                  <PageAnnotator
-                    imageUrl={
-                      current.image_url ? toAbs(current.image_url) : null
-                    }
-                    imageBase64={current?.image}
-                    elements={current?.elements || []}
-                    showBoxes={showBoxes}
-                    visibleTypes={["text", "table", "image"]}
-                    yOrigin={current?.y_origin || "top-left"}
-                    coordWidth={current?.coord_width}
-                    coordHeight={current?.coord_height}
-                    onImageLoadNaturalSize={(w, h) => setImgSize({ w, h })}
-                    appliedZoom={appliedZoom}
+              <div
+                ref={containerRef}
+                className="bg-gradient-to-br from-gray-100 to-gray-50 overflow-auto flex-1 min-h-0 h-full rounded-lg border border-gray-200/50 shadow-inner"
+              >
+                {!current ? (
+                  <div className="h-full flex items-center justify-center text-gray-500">
+                    <div className="text-center">
+                      <div className="text-4xl mb-2 opacity-60">📄</div>
+                      <p>No pages available</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{ width: `${appliedZoom * 100}%`, minWidth: "100%" }}
+                  >
+                    <PageAnnotator
+                      imageUrl={
+                        current.image_url ? toAbs(current.image_url) : null
+                      }
+                      imageBase64={current?.image}
+                      elements={current?.elements || []}
+                      showBoxes={showBoxes}
+                      visibleTypes={["text", "table", "image"]}
+                      yOrigin={current?.y_origin || "top-left"}
+                      coordWidth={current?.coord_width}
+                      coordHeight={current?.coord_height}
+                      onImageLoadNaturalSize={(w, h) => setImgSize({ w, h })}
+                      appliedZoom={appliedZoom}
+                      onSelect={(idx, element) => setSelectedElement(element)}
+                      selectedIdx={selectedElement?.idx}
+                    />
+                  </div>
+                )}
+              </div>
+            </EnhancedPane>
+          )}
+
+          {/* RIGHT: Enhanced Content Preview */}
+          {(viewMode === "split" || viewMode === "content-only") && (
+            <EnhancedPane
+              title={
+                <>
+                  <span className="mr-3 text-xl">📝</span>
+                  <span className="font-semibold">Extracted Content</span>
+                  {selectedElement && (
+                    <span className="ml-2 text-sm font-normal text-blue-600">
+                      Selected: {selectedElement.type}
+                    </span>
+                  )}
+                </>
+              }
+              subtitle="Markdown preview of extracted text and tables"
+              actions={
+                <div className="flex items-center gap-2">
+                  <EnhancedActionBtn
+                    title="Copy JSON to clipboard"
+                    ariaLabel="Copy JSON"
+                    onClick={handleJsonCopy}
+                    variant="copy"
+                    icon="📋"
+                    disabled={!jsonText}
+                  />
+                  <EnhancedActionBtn
+                    title="Copy Markdown to clipboard"
+                    ariaLabel="Copy Markdown"
+                    onClick={handleMarkdownCopy}
+                    variant="copy"
+                    icon="📝"
+                    disabled={!markdownText}
+                  />
+                  <EnhancedActionBtn
+                    title="Download as JSON file"
+                    ariaLabel="Download JSON"
+                    onClick={handleJsonDownload}
+                    variant="download"
+                    icon="💾"
+                    disabled={!jsonText || isLoading}
+                    loading={isLoading}
+                  />
+                  <EnhancedActionBtn
+                    title="Download as Markdown file"
+                    ariaLabel="Download Markdown"
+                    onClick={handleMarkdownDownload}
+                    variant="download"
+                    icon="📄"
+                    disabled={!markdownText || isLoading}
+                    loading={isLoading}
                   />
                 </div>
-              )}
-            </div>
-          </EnhancedPane>
-
-          {/* RIGHT: Markdown Preview */}
-          <EnhancedPane
-            title={
-              <>
-                <span className="mr-3 text-xl">📝</span>
-                <span className="font-semibold">Extracted Content</span>
-              </>
-            }
-            subtitle="Markdown preview"
-            actions={
-              <div className="flex items-center gap-2">
-                <EnhancedActionBtn
-                  title="Copy JSON to clipboard"
-                  ariaLabel="Copy JSON"
-                  onClick={handleJsonCopy}
-                  variant="copy"
-                >
-                  📋
-                </EnhancedActionBtn>
-                <EnhancedActionBtn
-                  title="Copy Markdown to clipboard"
-                  ariaLabel="Copy Markdown"
-                  onClick={handleMarkdownCopy}
-                  variant="copy"
-                >
-                  📋
-                </EnhancedActionBtn>
-                <EnhancedActionBtn
-                  title="Download as JSON file"
-                  ariaLabel="Download JSON"
-                  onClick={handleJsonDownload}
-                  variant="download"
-                >
-                  ⬇️
-                </EnhancedActionBtn>
-                <EnhancedActionBtn
-                  title="Download as Markdown file"
-                  ariaLabel="Download Markdown"
-                  onClick={handleMarkdownDownload}
-                  variant="download"
-                >
-                  ⬇️
-                </EnhancedActionBtn>
+              }
+            >
+              <div className="overflow-auto flex-1 min-h-0 h-full bg-white/70 rounded-lg border border-gray-200/50 shadow-inner">
+                {currentPageMarkdown ? (
+                  <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm text-black bg-white">
+                    <code>{currentPageMarkdown}</code>
+                  </pre>
+                ) : (
+                  // <div className="p-6 prose prose-sm max-w-none animate-fadeIn">
+                  //   <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm">
+                  //     {currentPageMarkdown}
+                  //   </pre>
+                  //   <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  //     {currentPageMarkdown}
+                  //   </ReactMarkdown>
+                  // </div>
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400 p-6">
+                    <div className="relative">
+                      <div className="text-5xl mb-3 opacity-60">📝</div>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">!</span>
+                      </div>
+                    </div>
+                    <h4 className="text-lg font-semibold text-gray-600 mb-2">
+                      No content extracted
+                    </h4>
+                    <p className="text-sm text-center max-w-md">
+                      This page may contain only images, or the content
+                      extraction is still in progress.
+                    </p>
+                    {!isCompleted && (
+                      <div className="mt-3 flex items-center gap-2 text-blue-600">
+                        <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                        <span className="text-sm">Processing...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            }
-          >
-            <div className="p-6 overflow-auto flex-1 min-h-0 h-full prose prose-sm max-w-none bg-white/50 rounded-lg border border-gray-200/50">
-              {currentPageMarkdown ? (
-                <div className="animate-fadeIn">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {currentPageMarkdown}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                  <div className="text-5xl mb-3 opacity-60">📝</div>
-                  <p className="text-lg font-medium">No content extracted</p>
-                  <p className="text-sm mt-1">
-                    This page may be empty or contain only images
-                  </p>
-                </div>
-              )}
-            </div>
-          </EnhancedPane>
+            </EnhancedPane>
+          )}
         </div>
       </div>
     </div>
@@ -464,52 +687,71 @@ export default function ResultsViewer({
 function StatusPill({ isCompleted }) {
   return (
     <span
-      className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm transition-all duration-200 ${
+      className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm transition-all duration-200 flex items-center gap-2 ${
         isCompleted
           ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
-          : "bg-gradient-to-r from-blue-500 to-blue-600 text-white animate-pulse"
+          : "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
       }`}
     >
-      {isCompleted ? "✓ Completed" : "⏳ Processing"}
+      {isCompleted ? (
+        <>✓ Completed</>
+      ) : (
+        <>
+          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          Processing
+        </>
+      )}
     </span>
   );
 }
 
-function EnhancedIconOnly({ children, onClick, title, ariaLabel }) {
+function EnhancedIconOnly({
+  children,
+  onClick,
+  title,
+  ariaLabel,
+  disabled = false,
+}) {
   return (
     <button
       onClick={onClick}
       title={title}
       aria-label={ariaLabel}
-      className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-lg transition-all duration-200 hover:scale-105 hover:shadow-md active:scale-95"
+      disabled={disabled}
+      className={`inline-flex items-center justify-center w-10 h-10 rounded-xl border transition-all duration-200 ${
+        disabled
+          ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+          : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 hover:scale-105 hover:shadow-md active:scale-95"
+      } text-lg`}
     >
       {children}
     </button>
   );
 }
 
-function EnhancedToolbarBtn({ children, onClick, disabled, title }) {
+function EnhancedToolbarBtn({ children, onClick, disabled, title, icon }) {
   return (
     <button
       onClick={onClick}
       title={title}
       disabled={disabled}
-      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-200 ${
+      className={`flex items-center justify-center w-10 h-10 rounded-lg border text-lg transition-all duration-200 ${
         disabled
           ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
-          : "bg-white hover:bg-gray-50 text-gray-800 border-gray-200 hover:border-gray-300 hover:shadow-sm active:scale-95"
+          : "bg-white hover:bg-gray-50 text-gray-800 border-gray-200 hover:border-gray-300 hover:shadow-sm active:scale-95 hover:scale-105"
       }`}
     >
-      {children}
+      {icon || children}
     </button>
   );
 }
 
-function EnhancedSegBtn({ active, onClick, children, divider }) {
+function EnhancedSegBtn({ active, onClick, children, divider, title }) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative ${
+      title={title}
+      className={`px-4 py-2 text-sm font-medium transition-all duration-200 relative flex items-center gap-2 ${
         active
           ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm"
           : "bg-white hover:bg-gray-50 text-gray-700 hover:text-gray-900"
@@ -517,8 +759,24 @@ function EnhancedSegBtn({ active, onClick, children, divider }) {
     >
       {children}
       {active && (
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-blue-600/20 rounded-lg"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-blue-600/20 rounded-lg pointer-events-none"></div>
       )}
+    </button>
+  );
+}
+
+function ViewModeButton({ active, onClick, title, icon, divider }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`px-3 py-2 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm"
+          : "bg-white hover:bg-gray-50 text-gray-700 hover:text-gray-900"
+      } ${divider ? "border-l border-gray-200" : ""}`}
+    >
+      {icon}
     </button>
   );
 }
@@ -528,8 +786,8 @@ function EnhancedPane({ title, subtitle, actions, children }) {
     <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 overflow-hidden transition-all duration-300 hover:shadow-xl h-full flex flex-col min-h-0">
       <div className="bg-gradient-to-r from-gray-50/80 to-white/80 px-5 py-4 border-b border-gray-200/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-bold text-gray-800 flex items-center text-base">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-bold text-gray-800 flex items-center text-base truncate">
               {title}
             </h3>
             {subtitle && (
@@ -538,7 +796,11 @@ function EnhancedPane({ title, subtitle, actions, children }) {
               </p>
             )}
           </div>
-          {actions && <div className="flex items-center gap-1">{actions}</div>}
+          {actions && (
+            <div className="flex items-center gap-1 ml-4 flex-shrink-0">
+              {actions}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex-1 min-h-0">{children}</div>
@@ -548,11 +810,15 @@ function EnhancedPane({ title, subtitle, actions, children }) {
 
 function StatChip({ icon, label, value }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2 bg-white/90 backdrop-blur-sm rounded-xl border border-white/50 text-sm shadow-sm hover:shadow-md transition-all duration-200">
-      <span className="text-lg">{icon}</span>
-      <div className="flex flex-col">
-        <span className="text-gray-800 font-semibold text-sm">{value}</span>
-        <span className="text-gray-500 text-xs font-medium">{label}</span>
+    <div className="flex items-center gap-3 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-xl border border-white/50 text-sm shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105">
+      <span className="text-base flex-shrink-0">{icon}</span>
+      <div className="flex flex-col min-w-0">
+        <span className="text-gray-800 font-semibold text-sm truncate">
+          {value}
+        </span>
+        <span className="text-gray-500 text-xs font-medium truncate">
+          {label}
+        </span>
       </div>
     </div>
   );
@@ -564,16 +830,21 @@ function EnhancedActionBtn({
   title,
   ariaLabel,
   variant = "default",
+  icon,
+  disabled = false,
+  loading = false,
 }) {
   const baseClasses =
-    "inline-flex items-center justify-center w-9 h-9 rounded-lg text-sm transition-all duration-200 hover:scale-105 active:scale-95";
+    "inline-flex items-center justify-center w-9 h-9 rounded-lg text-sm transition-all duration-200 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50";
 
   const variantClasses = {
-    copy: "bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 hover:border-blue-300",
+    copy: "bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 hover:border-blue-300 disabled:hover:bg-blue-50",
     download:
-      "bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 hover:border-green-300",
+      "bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 hover:border-green-300 disabled:hover:bg-green-50",
+    active:
+      "bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-200 hover:border-purple-300",
     default:
-      "bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300",
+      "bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300 disabled:hover:bg-gray-50",
   };
 
   return (
@@ -581,14 +852,42 @@ function EnhancedActionBtn({
       onClick={onClick}
       title={title}
       aria-label={ariaLabel}
+      disabled={disabled || loading}
       className={`${baseClasses} ${variantClasses[variant]} hover:shadow-sm`}
     >
-      {children}
+      {loading ? (
+        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+      ) : (
+        icon || children
+      )}
     </button>
   );
 }
 
-/* Add custom animations */
+function EnhancedToggle({ checked, onChange, label, title }) {
+  return (
+    <div className="flex items-center gap-2" title={title}>
+      <button
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          checked ? "bg-blue-600" : "bg-gray-200"
+        }`}
+        role="switch"
+        aria-checked={checked}
+        aria-label={title}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+            checked ? "translate-x-6" : "translate-x-1"
+          }`}
+        />
+      </button>
+      <span className="text-xs font-medium text-gray-600">{label}</span>
+    </div>
+  );
+}
+
+/* Add custom animations and enhanced styles */
 const style = document.createElement("style");
 style.textContent = `
   @keyframes fadeIn {
@@ -597,7 +896,100 @@ style.textContent = `
   }
   
   .animate-fadeIn {
-    animation: fadeIn 0.3s ease-out;
+    animation: fadeIn 0.4s ease-out;
+  }
+  
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  .animate-slideIn {
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  /* Enhanced scrollbars */
+  .prose::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .prose::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+  }
+  
+  .prose::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+  }
+  
+  .prose::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Enhanced prose styling */
+  .prose {
+    --tw-prose-headings: theme(colors.gray.900);
+    --tw-prose-lead: theme(colors.gray.600);
+    --tw-prose-links: theme(colors.blue.600);
+    --tw-prose-bold: theme(colors.gray.900);
+    --tw-prose-counters: theme(colors.gray.500);
+    --tw-prose-bullets: theme(colors.gray.300);
+    --tw-prose-hr: theme(colors.gray.200);
+    --tw-prose-quotes: theme(colors.gray.900);
+    --tw-prose-quote-borders: theme(colors.gray.200);
+    --tw-prose-captions: theme(colors.gray.500);
+    --tw-prose-code: theme(colors.gray.900);
+    --tw-prose-pre-code: theme(colors.gray.200);
+    --tw-prose-pre-bg: theme(colors.gray.800);
+    --tw-prose-th-borders: theme(colors.gray.300);
+    --tw-prose-td-borders: theme(colors.gray.200);
+  }
+  
+  .prose table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    width: 100%;
+    margin: 1em 0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  
+  .prose th {
+    background: linear-gradient(135deg, theme(colors.blue.50), theme(colors.blue.100));
+    font-weight: 600;
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid theme(colors.blue.200);
+  }
+  
+  .prose td {
+    padding: 12px;
+    border-bottom: 1px solid theme(colors.gray.200);
+  }
+  
+  .prose tr:hover {
+    background-color: theme(colors.gray.50);
+  }
+  
+  /* Enhanced focus states */
+  button:focus-visible {
+    outline: 2px solid theme(colors.blue.500);
+    outline-offset: 2px;
+  }
+  
+  select:focus-visible {
+    outline: 2px solid theme(colors.blue.500);
+    outline-offset: 2px;
   }
 `;
-document.head.appendChild(style);
+
+if (
+  !document.head.querySelector(
+    'style[data-component="enhanced-results-viewer"]'
+  )
+) {
+  style.setAttribute("data-component", "enhanced-results-viewer");
+  document.head.appendChild(style);
+}
