@@ -27,6 +27,7 @@ export default function PageAnnotator({
   onImageLoadNaturalSize,
   coordWidth,
   coordHeight,
+  appliedZoom,
 }) {
   const wrapperRef = useRef(null);
   const imgRef = useRef(null);
@@ -79,6 +80,7 @@ export default function PageAnnotator({
       y: rendered.h / coordSpace.h,
     };
   }, [coordSpace, rendered]);
+
   const boxes = useMemo(() => {
     return filtered.map((el) => {
       const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = el.bbox || [];
@@ -92,6 +94,16 @@ export default function PageAnnotator({
       return { ...el, left, top, width, height };
     });
   }, [filtered, scale, coordSpace.h, yOrigin]);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    let raf = requestAnimationFrame(() => {
+      setRendered({ w: img.clientWidth || 0, h: img.clientHeight || 0 });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [appliedZoom]);
+
   useEffect(() => {
     console.log(
       "[Annotator] natural=",
@@ -223,7 +235,7 @@ export default function PageAnnotator({
   return (
     <div
       ref={wrapperRef}
-      className="relative w-full overflow-auto border border-gray-200/50 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 h-[60vh]"
+      className="relative w-full overflow-auto border border-gray-200/50 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 h-full"
     >
       <div className="relative inline-block">
         <img

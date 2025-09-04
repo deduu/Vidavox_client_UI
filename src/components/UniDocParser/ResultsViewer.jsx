@@ -53,6 +53,8 @@ export default function ResultsViewer({
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
+  const [showBoxes, setShowBoxes] = useState(true);
+
   // base headers only change when the token changes
   const baseHeaders = useMemo(() => {
     return token ? { Authorization: `Bearer ${token}` } : EMPTY_HEADERS;
@@ -246,6 +248,7 @@ export default function ResultsViewer({
               value={stats.time || "—"}
             />
             <div className="w-px h-8 bg-gray-200"></div>
+
             <EnhancedIconOnly
               title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               ariaLabel={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
@@ -342,6 +345,18 @@ export default function ResultsViewer({
               </>
             }
             subtitle="Source PDF page"
+            actions={
+              <div className="flex items-center gap-2">
+                <EnhancedActionBtn
+                  title="Show/hide boxes"
+                  ariaLabel="Show/hide boxes"
+                  onClick={() => setShowBoxes((s) => !s)}
+                  variant="default"
+                >
+                  {showBoxes ? "👁️" : "🚫"}
+                </EnhancedActionBtn>
+              </div>
+            }
           >
             {/* Attach the containerRef here so ResizeObserver can compute fit-width */}
             <div
@@ -362,13 +377,13 @@ export default function ResultsViewer({
                     }
                     imageBase64={current?.image}
                     elements={current?.elements || []}
-                    showBoxes
+                    showBoxes={showBoxes}
                     visibleTypes={["text", "table", "image"]}
-                    // NEW:
                     yOrigin={current?.y_origin || "top-left"}
                     coordWidth={current?.coord_width}
                     coordHeight={current?.coord_height}
                     onImageLoadNaturalSize={(w, h) => setImgSize({ w, h })}
+                    appliedZoom={appliedZoom}
                   />
                 </div>
               )}
