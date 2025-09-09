@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import MessageActions from "./MessageActions";
 import { FileText } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import CodeRenderer from "../renderer/CodeRenderer";
+import CodeBlock from "../renderer/CodeBlock";
 
 // === Bubble layout settings ===
 // Use any Tailwind percentage / ch / rem etc.
@@ -40,6 +42,7 @@ const MarkdownRenderer = ({ content }) => (
   <div className="prose max-w-none">
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      // IMPORTANT: allow spans + classes so hljs can color text
       rehypePlugins={[
         [
           rehypeSanitize,
@@ -59,13 +62,51 @@ const MarkdownRenderer = ({ content }) => (
               "h3",
               "blockquote",
               "br",
+              "span",
+              "div",
             ],
-            attributes: { a: ["href", "target", "rel"] },
+            attributes: {
+              a: ["href", "target", "rel"],
+              code: ["className"],
+              span: ["className"],
+              div: ["className"],
+            },
           },
         ],
       ]}
+      components={{
+        code({ inline, className, children, ...props }) {
+          const m = /language-(\w+)/.exec(className || "");
+          const lang = m?.[1];
+          const raw = String(children ?? "");
+          const hasNewline = raw.includes("\n");
+          const tiny = raw.trim().length <= 40;
+
+          // Treat short, single-line snippets as inline code even if parsed oddly
+          if (inline || (!hasNewline && tiny && !lang)) {
+            return (
+              <code
+                className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200"
+                {...props}
+              >
+                {children}
+              </code>
+            );
+          }
+          return <CodeBlock code={raw} language={lang} />;
+        },
+        strong({ children, ...p }) {
+          return <strong className="font-bold">{children}</strong>;
+        },
+        b({ children, ...p }) {
+          return <b className="font-bold">{children}</b>;
+        },
+        em({ children, ...p }) {
+          return <em className="italic">{children}</em>;
+        },
+      }}
     >
-      {fixBrokenLinks(content)}
+      {content}
     </ReactMarkdown>
   </div>
 );
@@ -87,14 +128,14 @@ const HtmlRenderer = ({ content }) => (
   </div>
 );
 
-const CodeRenderer = ({ content, language }) => (
-  <div className="bg-gray-900 text-green-400 p-3 rounded">
-    <div className="text-xs text-gray-400 mb-2">{language || "Code"}</div>
-    <pre className="text-sm overflow-x-auto">
-      <code>{content}</code>
-    </pre>
-  </div>
-);
+// const CodeRenderer = ({ content, language }) => (
+//   <div className="bg-gray-900 text-green-400 p-3 rounded">
+//     <div className="text-xs text-gray-400 mb-2">{language || "Code"}</div>
+//     <pre className="text-sm overflow-x-auto">
+//       <code>{content}</code>
+//     </pre>
+//   </div>
+// );
 
 /* =========================
  * Attachment helpers

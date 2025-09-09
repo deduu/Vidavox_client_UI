@@ -14,6 +14,7 @@ export default function ChatInput({
   message,
   setMessage,
   onSend,
+  onStop,
   onAttachFiles, // (FileList) => Promise<void> | void
   onPasteImage, // (File) => Promise<void> | void
   disabled,
@@ -299,22 +300,34 @@ export default function ChatInput({
                   <Mic size={16} className="text-gray-600" />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={onSend}
-                  disabled={disabled || anyUploading || !canSend}
-                  className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title={
-                    anyUploading
-                      ? "Please wait for uploads to finish"
-                      : !canSend
-                      ? "Type a message or attach a file"
-                      : "Send message"
-                  }
-                  aria-label="Send message"
-                >
-                  <Send size={16} className="text-white" />
-                </button>
+                {disabled ? (
+                  <button
+                    type="button"
+                    onClick={onStop}
+                    className="p-1.5 rounded-full bg-red-600 hover:bg-red-700 transition-colors"
+                    title="Stop generation"
+                    aria-label="Stop message generation"
+                  >
+                    <X size={16} className="text-white" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onSend}
+                    disabled={disabled || anyUploading || !canSend}
+                    className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title={
+                      anyUploading
+                        ? "Please wait for uploads to finish"
+                        : !canSend
+                        ? "Type a message or attach a file"
+                        : "Send message"
+                    }
+                    aria-label="Send message"
+                  >
+                    <Send size={16} className="text-white" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

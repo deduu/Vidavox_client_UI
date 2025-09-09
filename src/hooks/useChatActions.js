@@ -1,5 +1,5 @@
 // hooks/useChatActions.js
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
   sendChatMessage,
@@ -8,6 +8,8 @@ import {
   uploadAttachment,
 } from "../services/api";
 import { useChatSession } from "../contexts/ChatSessionContext";
+
+let abortController = null;
 
 export const useChatActions = ({
   message,
@@ -36,6 +38,7 @@ export const useChatActions = ({
   scrollToBottom,
   isAtBottomRef,
 }) => {
+  const abortControllerRef = useRef(null);
   const { sendMessageToCurrentChat, renameChat } = useChatSession();
 
   const sendChatMessageToBackend = async (msg) => {
@@ -127,6 +130,13 @@ export const useChatActions = ({
   };
 
   const handleSend = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     const uploaded = attachments.filter((a) => a.meta?.url && !a.uploading);
     const hasAttachment = uploaded.length > 0;
 
@@ -171,14 +181,15 @@ export const useChatActions = ({
 
     try {
       if (selectedKbs.length > 0) {
-        await handleKnowledgeBaseChat(userMsg, sessionId);
+        await handleKnowledgeBaseChat(userMsg, sessionId, signal);
       } else {
         await handleDirectChat(
           userMsg,
           sessionId,
           imageUrls,
           fileUrls,
-          isVision
+          isVision,
+          signal
         );
       }
     } catch (err) {
@@ -200,7 +211,7 @@ export const useChatActions = ({
     streaming,
   ]);
 
-  const handleKnowledgeBaseChat = async (userMsg, sessionId) => {
+  const handleKnowledgeBaseChat = async (userMsg, sessionId, signal) => {
     const allFileIds = selectedKbs.flatMap((kb) => kb.files.map((f) => f.id));
 
     console.log("🔍 Using KBs:", allFileIds);
@@ -212,6 +223,7 @@ export const useChatActions = ({
       topK,
       threshold,
       session_id: sessionId,
+      signal: signal,
     });
 
     const assistantMsg = {
@@ -231,7 +243,8 @@ export const useChatActions = ({
     sessionId,
     imageUrls,
     fileUrls,
-    isVision
+    isVision,
+    signal
   ) => {
     await maybeAutoRenameChat(userMsg);
     const mustStream = streaming && !isVision;
@@ -244,6 +257,7 @@ export const useChatActions = ({
       attached_image_urls: imageUrls,
       attached_file_urls: fileUrls,
       session_id: sessionId,
+      signal: signal,
     };
 
     if (mustStream) {
@@ -425,6 +439,13 @@ export const useChatActions = ({
     ]
   );
 
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      console.log("🛑 Streaming manually aborted.");
+    }
+  }, []);
+
   const handlePasteImage = useCallback(async (file) => {
     await addFilesAndUpload([file]);
   }, []);
@@ -474,6 +495,7 @@ export const useChatActions = ({
     handlePasteImage,
     handleAttachFiles,
     handleRemoveAttachment,
+    handleStop,
     handleTopKChange,
     handleThresholdChange,
   };

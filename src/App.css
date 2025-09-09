@@ -30,6 +30,14 @@ body {
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
+.hljs {
+  background: transparent !important;
+}
+/* global.css */
+.prose strong,
+.prose b {
+  font-weight: 700 !important;
+}
 
 @keyframes logo-spin {
   from {

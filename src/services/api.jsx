@@ -353,6 +353,7 @@ export async function sendChatMessage({
   threshold,
   file,
   session_id,
+  signal,
 }) {
   const form = new FormData();
   form.append("query", message);
@@ -377,6 +378,7 @@ export async function sendChatMessage({
       ...authHeader(), // Authorization only; FormData sets its own Content-Type
     },
     body: form,
+    signal,
   });
 
   const data = await res.json();
@@ -414,6 +416,7 @@ export async function chatDirect({
   attached_file_urls = [], // non-image attachments
   // Legacy fallback (still supported): raw File
   file,
+  signal,
 }) {
   // --- Client-side validation to avoid sending bad payloads ---
   if (
@@ -452,6 +455,7 @@ export async function chatDirect({
     method: "POST",
     headers: { ...authHeader() }, // don't set Content-Type for FormData
     body: fd,
+    signal,
   };
 
   // logChat("request(non-stream)", {
@@ -498,6 +502,7 @@ export async function* chatDirectStream({
   attached_image_urls = [],
   attached_file_urls = [],
   file, // legacy fallback
+  signal,
 }) {
   const fd = new FormData();
   fd.append("model", model);
@@ -522,6 +527,7 @@ export async function* chatDirectStream({
     method: "POST",
     headers: { ...authHeader() },
     body: fd,
+    signal,
   };
 
   logChat("request(stream)", {

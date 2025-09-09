@@ -7,6 +7,7 @@ const ChatInputContainer = forwardRef(function ChatInputContainer(
     message,
     setMessage,
     onSend,
+    onStop,
     disabled,
     onAttachFiles,
     attachments,
@@ -27,6 +28,7 @@ const ChatInputContainer = forwardRef(function ChatInputContainer(
             message={message}
             setMessage={setMessage}
             onSend={onSend}
+            onStop={onStop}
             disabled={disabled}
             onAttachFiles={onAttachFiles}
             attachments={attachments}

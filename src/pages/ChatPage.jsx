@@ -70,6 +70,7 @@ export default function ChatPage() {
     handlePasteImage,
     handleAttachFiles,
     handleRemoveAttachment,
+    handleStop,
     handleTopKChange,
     handleThresholdChange,
   } = useChatActions({
@@ -166,6 +167,7 @@ export default function ChatPage() {
             message={message}
             setMessage={setMessage}
             onSend={handleSend}
+            onStop={handleStop}
             disabled={sending}
             onAttachFiles={handleAttachFiles}
             attachments={attachments}
