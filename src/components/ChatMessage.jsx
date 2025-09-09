@@ -349,10 +349,16 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
 
           return (
             <div
-              className={`inline-block rounded-lg p-3 shadow ${
+              // className={`inline-block rounded-lg p-3 shadow ${
+              //   isUser
+              //     ? `bg-blue-100 text-right ${USER_BUBBLE_MAX}`
+              //     : `bg-gray-100 ${ASSIST_BUBBLE_MAX}`
+              // }`}
+
+              className={`inline-block rounded-lg p-3  ${
                 isUser
                   ? `bg-blue-100 text-right ${USER_BUBBLE_MAX}`
-                  : `bg-gray-100 ${ASSIST_BUBBLE_MAX}`
+                  : `bg-transparent`
               }`}
             >
               <div className="prose max-w-none">{renderContent(msg)}</div>

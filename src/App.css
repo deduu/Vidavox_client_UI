@@ -14,6 +14,7 @@ body {
   margin: 0;
   padding: 0;
   text-align: left;
+  min-height: 0;
   overflow: hidden; /* keep if you want to block page scrollbars */
 }
 
