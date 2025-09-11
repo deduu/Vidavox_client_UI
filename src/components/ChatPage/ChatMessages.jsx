@@ -2,6 +2,7 @@
 import React from "react";
 import ChatMessage from "../../components/ChatMessage";
 
+
 const ChatMessages = ({ history, typing, hasKnowledgeBases }) => {
   const handleCopy = (content) => {
     navigator.clipboard.writeText(content);
