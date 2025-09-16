@@ -640,18 +640,18 @@ export default function ResultsViewer({
             >
               <div className="overflow-auto flex-1 min-h-0 h-full bg-white/70 rounded-lg border border-gray-200/50 shadow-inner">
                 {currentPageMarkdown ? (
-                  <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm text-black bg-white">
-                    <code>{currentPageMarkdown}</code>
-                  </pre>
+                  <div className="p-6 prose prose-sm max-w-none animate-fadeIn">
+                    <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm">
+                      {currentPageMarkdown}
+                    </pre>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {currentPageMarkdown}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
-                  // <div className="p-6 prose prose-sm max-w-none animate-fadeIn">
-                  //   <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm">
-                  //     {currentPageMarkdown}
-                  //   </pre>
-                  //   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  //     {currentPageMarkdown}
-                  //   </ReactMarkdown>
-                  // </div>
+                  // <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm text-black bg-white">
+                  //   <code>{currentPageMarkdown}</code>
+                  // </pre>
                   <div className="flex flex-col items-center justify-center h-full text-gray-400 p-6">
                     <div className="relative">
                       <div className="text-5xl mb-3 opacity-60">📝</div>

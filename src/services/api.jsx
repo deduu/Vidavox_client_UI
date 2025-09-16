@@ -751,6 +751,35 @@ export async function extractDocument({ file }) {
     markdown: data.markdown_output,
   };
 }
+
+/**
+ * Fetch list of jobs
+ */
+export async function getJobs({ skip = 0, limit = 50 } = {}) {
+  const res = await fetch(
+    `${API_URL}/docparser/jobs?skip=${skip}&limit=${limit}`,
+    { headers: authHeader() }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.detail || "Failed to fetch jobs");
+  return data;
+}
+
+/**
+ * Fetch extract summary for a given job
+ */
+export async function getJobSummary(jobId) {
+  const res = await fetch(
+    `${API_URL}/docparser/jobs/${jobId}/extract-summary`,
+    {
+      headers: authHeader(),
+    }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok)
+    throw new Error(data?.detail || `Failed to fetch job ${jobId} summary`);
+  return data;
+}
 // export async function extractDocument({ file }) {
 //   const token = localStorage.getItem("token");
 
