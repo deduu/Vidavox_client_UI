@@ -3,7 +3,7 @@ import React, { useState, useContext, useMemo, useEffect } from "react";
 import SidebarLayout from "../components/SidebarLayout";
 import { AuthContext } from "../contexts/AuthContext";
 import { useLocation } from "react-router-dom";
-import { getJobs, getJobSummary } from "../services/api";
+import { getJobs, getJobSummary, deleteJob } from "../services/api";
 // Custom hooks
 import { useFolderTree } from "../hooks/useFolderTree";
 import { useExtractionSession } from "../hooks/useExtractionSession";
@@ -43,6 +43,7 @@ export default function UniDocParserPage() {
 
   // Tab management
   const { activeTab, setActiveTab } = usePersistedTab("summary");
+  const [viewerFull, setViewerFull] = React.useState(false);
   const [viewMode, setViewMode] = useState("split"); // "split", "upload", "results"
 
   // Left panel state management
@@ -90,6 +91,14 @@ export default function UniDocParserPage() {
       setLoadingJob(false);
     }
   };
+  const handleDeleteJobs = async (ids) => {
+    try {
+      await Promise.all(ids.map((id) => deleteJob(id)));
+      setJobs((prev) => prev.filter((job) => !ids.includes(job.id)));
+    } catch (err) {
+      alert("Failed to delete job(s): " + err.message);
+    }
+  };
 
   // Update destination when folder list changes
   useEffect(() => {
@@ -121,143 +130,13 @@ export default function UniDocParserPage() {
   return (
     <SidebarLayout>
       <div className={`flex-1 flex flex-col min-h-0 ${THEME.pageBg}`}>
-        {/* Modern Header with Actions */}
-        <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">
-                    UniDoc Parser
-                  </h1>
-                  <p className="text-sm text-gray-500 hidden sm:block">
-                    AI-powered document analysis
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {loadingJob && (
-                <div className="flex items-center text-sm text-blue-600">
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Loading...
-                </div>
-              )}
-
-              {/* Mobile View Switcher */}
-              <div className="lg:hidden flex rounded-lg border border-gray-300 bg-white">
-                <button
-                  onClick={() => setViewMode("upload")}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-l-lg transition-colors ${
-                    viewMode === "upload"
-                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Upload
-                </button>
-                <button
-                  onClick={() => setViewMode("results")}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-r-lg transition-colors ${
-                    viewMode === "results"
-                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                  disabled={!hasActiveSession}
-                >
-                  Results
-                </button>
-              </div>
-
-              {/* Desktop View Options */}
-              <div className="hidden lg:flex items-center space-x-2">
-                <button
-                  onClick={() =>
-                    setViewMode(viewMode === "split" ? "results" : "split")
-                  }
-                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                >
-                  {viewMode === "split" ? (
-                    <>
-                      <svg
-                        className="w-4 h-4 mr-1.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 8l4-4m0 0h4m-4 0v4m11-1l-5-5m5 5h-4m4 0v-4M4 16l4 4m0 0v-4m0 4h4m11-5l5 5m5-5v4m0-4h-4"
-                        />
-                      </svg>
-                      Focus Mode
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-4 h-4 mr-1.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                        />
-                      </svg>
-                      Split View
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-
         {/* Main Content Area */}
         <main className="flex-1 min-h-0 overflow-hidden">
           <div className="h-full flex">
-            {/* Left Panel - Hidden on mobile results view */}
+            {/* Left Panel - Hidden when viewerFull is true */}
             <div
               className={`
+              ${viewerFull ? "hidden" : ""}
               ${
                 viewMode === "results" && window.innerWidth < 1024
                   ? "hidden"
@@ -351,7 +230,7 @@ export default function UniDocParserPage() {
                     {/* Status Banner */}
                     {selectedJobResult && (
                       <div className="flex-shrink-0 mx-4 mt-4 mb-2">
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="bg-blue-50 border border-blue-200 p-3">
                           <div className="flex items-center">
                             <svg
                               className="w-5 h-5 text-blue-600 mr-2"
@@ -397,7 +276,12 @@ export default function UniDocParserPage() {
 
                     {/* Jobs Table */}
                     <div className="flex-1 min-h-0 overflow-hidden">
-                      <JobsTable jobs={jobs} onSelectJob={handleSelectJob} />
+                      <JobsTable
+                        jobs={jobs}
+                        onSelectJob={handleSelectJob}
+                        onDeleteJobs={handleDeleteJobs}
+                      />
+                      ;
                     </div>
                   </div>
                 )}
@@ -408,13 +292,11 @@ export default function UniDocParserPage() {
             <div
               className={`
               ${
-                viewMode === "upload" && window.innerWidth < 1024
+                !viewerFull && viewMode === "upload" && window.innerWidth < 1024
                   ? "hidden"
                   : ""
               }
-              ${viewMode === "split" ? "flex-1" : ""}
-              ${viewMode === "results" ? "flex-1" : ""}
-              min-h-0 bg-gray-50 flex flex-col
+              flex-1 min-h-0 bg-gray-50 flex flex-col
             `}
             >
               {/* Results or Welcome State */}
@@ -426,10 +308,8 @@ export default function UniDocParserPage() {
                   extractionOptions={extractionOptions}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
-                  isFullscreen={viewMode === "results"}
-                  onToggleFullscreen={() =>
-                    setViewMode(viewMode === "split" ? "results" : "split")
-                  }
+                  isFullscreen={viewerFull}
+                  onToggleFullscreen={() => setViewerFull(!viewerFull)}
                   className="h-full"
                 />
               ) : (
@@ -448,7 +328,7 @@ function WelcomeState({ onGetStarted }) {
   return (
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="text-center max-w-md">
-        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
+        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600  mx-auto mb-6 flex items-center justify-center shadow-lg">
           <svg
             className="w-10 h-10 text-white"
             fill="none"
@@ -476,7 +356,7 @@ function WelcomeState({ onGetStarted }) {
         <div className="space-y-4">
           <button
             onClick={onGetStarted}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium py-3 px-6 transition-all duration-200 transform hover:scale-105 shadow-lg"
           >
             Get Started
           </button>

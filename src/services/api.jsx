@@ -764,6 +764,22 @@ export async function getJobs({ skip = 0, limit = 50 } = {}) {
   if (!res.ok) throw new Error(data?.detail || "Failed to fetch jobs");
   return data;
 }
+/*
+ * Delete job
+ */
+export async function deleteJob(jobId, { complete = false } = {}) {
+  const res = await fetch(
+    `${API_URL}/docparser/jobs/${jobId}?complete=${complete}`,
+    {
+      method: "DELETE",
+      headers: authHeader(),
+    }
+  );
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.detail || "Failed to delete job");
+  return data;
+}
 
 /**
  * Fetch extract summary for a given job

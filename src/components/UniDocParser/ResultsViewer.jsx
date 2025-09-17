@@ -294,32 +294,32 @@ export default function ResultsViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [pages.length, onToggleFullscreen]);
 
-  if (!current) {
-    return (
-      <div className="h-full flex flex-col">
-        <div
-          className={`${THEME.glass} h-full flex flex-col items-center justify-center rounded-2xl shadow-xl p-16 text-center backdrop-blur-md border border-white/20`}
-        >
-          <div className="relative">
-            <div className="text-6xl mb-4 opacity-60">📄</div>
-            <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-xs">!</span>
-            </div>
-          </div>
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">
-            No Pages Available
-          </h3>
-          <p className="text-gray-500 text-base mb-4">
-            Upload a document to begin extraction
-          </p>
-          <div className="flex flex-col gap-2 text-sm text-gray-400">
-            <span>• Supported formats: PDF, DOC, DOCX</span>
-            <span>• Maximum file size: 50MB</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // if (!current) {
+  //   return (
+  //     <div className="h-full flex flex-col">
+  //       <div
+  //         className={`${THEME.glass} h-full flex flex-col items-center justify-center rounded-2xl shadow-xl p-16 text-center backdrop-blur-md border border-white/20`}
+  //       >
+  //         <div className="relative">
+  //           <div className="text-6xl mb-4 opacity-60">📄</div>
+  //           <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+  //             <span className="text-white text-xs">!</span>
+  //           </div>
+  //         </div>
+  //         <h3 className="text-xl font-semibold text-gray-700 mb-2">
+  //           No Pages Available
+  //         </h3>
+  //         <p className="text-gray-500 text-base mb-4">
+  //           Upload a document to begin extraction
+  //         </p>
+  //         <div className="flex flex-col gap-2 text-sm text-gray-400">
+  //           <span>• Supported formats: PDF, DOC, DOCX</span>
+  //           <span>• Maximum file size: 50MB</span>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // Determine grid layout based on view mode
   const getGridClasses = () => {
@@ -336,88 +336,47 @@ export default function ResultsViewer({
 
   return (
     <div
-      className={`${THEME.glass} h-full min-h-0 flex flex-col overflow-hidden rounded-2xl shadow-xl backdrop-blur-md border border-white/20 transition-all duration-300 hover:shadow-2xl ${className}`}
+      className={`${THEME.glass} h-full min-h-0 flex flex-col overflow-hidden shadow-xl backdrop-blur-md border border-white/20 transition-all duration-300 hover:shadow-2xl ${className}`}
     >
-      {/* ENHANCED HEADER */}
+      {/* Unified Header */}
       <div
         className={`${THEME.softBar} px-6 py-4 border-b border-white/10 bg-gradient-to-r from-blue-50/50 to-purple-50/30`}
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* File Info with enhanced styling */}
-          {file && (
-            <div className="flex items-center gap-4 min-w-0 flex-1">
-              <div className="relative">
-                <div className="text-blue-500 text-3xl p-3 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl backdrop-blur border border-blue-200/50 shadow-sm">
-                  📄
-                </div>
-                {isCompleted && (
-                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-white text-xs">✓</span>
+          {/* LEFT: File info & page navigation */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center flex-1 min-w-0">
+            {/* File Info */}
+            {file && (
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="relative">
+                  <div className="text-blue-500 text-3xl p-3 bg-gradient-to-br from-blue-100 to-blue-50 backdrop-blur border border-blue-200/50 shadow-sm">
+                    📄
                   </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-xl font-bold text-gray-800 truncate bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text">
-                  {file.name}
-                </h2>
-                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1 flex-wrap">
-                  <span className="font-medium px-2 py-1 bg-gray-100 rounded-md">
-                    {formatBytes(file.size)}
-                  </span>
-                  <span className="font-medium px-2 py-1 bg-blue-100 rounded-md text-blue-700">
-                    {stats.pages} pages
-                  </span>
-                  <StatusPill isCompleted={isCompleted} />
+                  {isCompleted && (
+                    <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500  flex items-center justify-center shadow-lg">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold text-gray-800 truncate bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text">
+                    {file.name}
+                  </h2>
+                  <div className="flex items-center gap-3 text-sm text-gray-600 mt-1 flex-wrap">
+                    <span className="font-medium px-2 py-1 bg-gray-100 rounded-md">
+                      {formatBytes(file.size)}
+                    </span>
+                    <span className="font-medium px-2 py-1 bg-blue-100 rounded-md text-blue-700">
+                      {stats.pages} pages
+                    </span>
+                    <StatusPill isCompleted={isCompleted} />
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Enhanced right side controls */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <StatChip icon="⏱️" label="Processing" value={stats.time || "—"} />
-            {/* <StatChip
-              icon="🔤"
-              label="Text blocks"
-              value={stats.textBlocks || "0"}
-            />
-            <StatChip icon="📊" label="Tables" value={stats.tables || "0"} /> */}
-
-            <div className="w-px h-8 bg-gray-200/50"></div>
-
-            <EnhancedIconOnly
-              title="Keyboard shortcuts (← → for navigation, Ctrl+F for fullscreen)"
-              ariaLabel="Show keyboard shortcuts"
-              onClick={() =>
-                alert(
-                  "Keyboard shortcuts:\n← → : Navigate pages\nCtrl+F : Toggle fullscreen"
-                )
-              }
-            >
-              ⌨️
-            </EnhancedIconOnly>
-
-            <EnhancedIconOnly
-              title={
-                isFullscreen
-                  ? "Exit fullscreen (Ctrl+F)"
-                  : "Enter fullscreen (Ctrl+F)"
-              }
-              ariaLabel={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              onClick={onToggleFullscreen}
-            >
-              {isFullscreen ? "🗗" : "🗖"}
-            </EnhancedIconOnly>
-          </div>
-        </div>
-      </div>
-
-      {/* ENHANCED TOOLBAR */}
-      <div className="px-6 py-4 bg-gradient-to-r from-white/90 to-gray-50/80 backdrop-blur border-b border-white/20">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* Enhanced Page Navigation */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
+            {/* Page Navigation */}
+            <div className="flex items-center gap-2 ml-0 lg:ml-6">
               <EnhancedToolbarBtn
                 title="Previous page (←)"
                 onClick={() => setActivePage((p) => Math.max(0, p - 1))}
@@ -437,9 +396,17 @@ export default function ResultsViewer({
                 icon="▶️"
               />
             </div>
+          </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center gap-2 ml-4">
+          {/* RIGHT: Controls */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Stats */}
+            <StatChip icon="⏱️" label="Processing" value={stats.time || "—"} />
+
+            <div className="w-px h-8 bg-gray-200/50"></div>
+
+            {/* View Mode */}
+            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-600 hidden sm:inline">
                 View:
               </span>
@@ -466,46 +433,39 @@ export default function ResultsViewer({
                 />
               </div>
             </div>
-          </div>
 
-          {/* Enhanced Display Controls */}
-          <div className="flex items-center gap-3 flex-wrap">
+            {/* Display Controls */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-600 hidden sm:inline">
-                Display:
-              </span>
-              <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
-                <EnhancedSegBtn
-                  active={mode === "fit-width"}
-                  onClick={() => setMode("fit-width")}
-                  title="Fit to width"
-                >
-                  📐
-                </EnhancedSegBtn>
-                <EnhancedSegBtn
-                  active={mode === "fit-page"}
-                  onClick={() => setMode("fit-page")}
-                  title="Fit to page"
-                  divider
-                >
-                  🖼️
-                </EnhancedSegBtn>
-                <EnhancedSegBtn
-                  active={mode === "manual"}
-                  onClick={() => setMode("manual")}
-                  title="Manual zoom"
-                  divider
-                >
-                  🔍
-                </EnhancedSegBtn>
-              </div>
+              <EnhancedSegBtn
+                active={mode === "fit-width"}
+                onClick={() => setMode("fit-width")}
+                title="Fit to width"
+              >
+                📐
+              </EnhancedSegBtn>
+              <EnhancedSegBtn
+                active={mode === "fit-page"}
+                onClick={() => setMode("fit-page")}
+                title="Fit to page"
+                divider
+              >
+                🖼️
+              </EnhancedSegBtn>
+              <EnhancedSegBtn
+                active={mode === "manual"}
+                onClick={() => setMode("manual")}
+                title="Manual zoom"
+                divider
+              >
+                🔍
+              </EnhancedSegBtn>
             </div>
 
             {mode === "manual" && (
               <select
                 value={zoom}
                 onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium bg-white shadow-sm hover:border-gray-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium bg-white shadow-sm"
               >
                 {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map((z) => (
                   <option key={z} value={z}>
@@ -515,17 +475,34 @@ export default function ResultsViewer({
               </select>
             )}
 
-            <div className="flex items-center gap-2 ml-2">
-              <span className="text-xs text-gray-500 font-mono px-2 py-1 bg-gray-100 rounded-lg">
-                {Math.round(appliedZoom * 100)}%
-              </span>
-              <EnhancedToggle
-                checked={showBoxes}
-                onChange={setShowBoxes}
-                label="Annotations"
-                title="Toggle annotation boxes"
-              />
-            </div>
+            {/* Annotation toggle */}
+            <EnhancedToggle
+              checked={showBoxes}
+              onChange={setShowBoxes}
+              label="Annotations"
+              title="Toggle annotation boxes"
+            />
+
+            {/* Utility buttons */}
+            <EnhancedIconOnly
+              title="Keyboard shortcuts"
+              ariaLabel="Show keyboard shortcuts"
+              onClick={() =>
+                alert(
+                  "Keyboard shortcuts:\n← → : Navigate pages\nCtrl+F : Toggle fullscreen"
+                )
+              }
+            >
+              ⌨️
+            </EnhancedIconOnly>
+
+            <EnhancedIconOnly
+              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              ariaLabel={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              onClick={onToggleFullscreen}
+            >
+              {isFullscreen ? "🗗" : "🗖"}
+            </EnhancedIconOnly>
           </div>
         </div>
       </div>
@@ -549,7 +526,7 @@ export default function ResultsViewer({
             >
               <div
                 ref={containerRef}
-                className="bg-gradient-to-br from-gray-100 to-gray-50 overflow-auto flex-1 min-h-0 h-full rounded-lg border border-gray-200/50 shadow-inner"
+                className="bg-gradient-to-br from-gray-100 to-gray-50 overflow-auto flex-1 min-h-0 h-full border-gray-200/50 shadow-inner"
               >
                 {!current ? (
                   <div className="h-full flex items-center justify-center text-gray-500">
@@ -638,12 +615,12 @@ export default function ResultsViewer({
                 </div>
               }
             >
-              <div className="overflow-auto flex-1 min-h-0 h-full bg-white/70 rounded-lg border border-gray-200/50 shadow-inner">
+              <div className="overflow-auto flex-1 min-h-0 h-full bg-white/70 border border-gray-200/50 shadow-inner">
                 {currentPageMarkdown ? (
                   <div className="p-6 prose prose-sm max-w-none animate-fadeIn">
-                    <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm">
+                    {/* <pre className="p-6 whitespace-pre-wrap break-words font-mono text-sm">
                       {currentPageMarkdown}
-                    </pre>
+                    </pre> */}
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {currentPageMarkdown}
                     </ReactMarkdown>
@@ -655,7 +632,7 @@ export default function ResultsViewer({
                   <div className="flex flex-col items-center justify-center h-full text-gray-400 p-6">
                     <div className="relative">
                       <div className="text-5xl mb-3 opacity-60">📝</div>
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500  flex items-center justify-center">
                         <span className="text-white text-xs">!</span>
                       </div>
                     </div>

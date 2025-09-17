@@ -8,6 +8,7 @@ export function buildJsonStringFromResult(extractionResult) {
 }
 
 export function buildMarkdownFromPages(pages) {
+  console.log("Building markdown from pages:", pages);
   const pageArray = Array.isArray(pages) ? pages : [];
   let combinedMarkdown = "";
 
@@ -20,7 +21,13 @@ export function buildMarkdownFromPages(pages) {
       if (combinedMarkdown) {
         combinedMarkdown += "\n\n---\n\n";
       }
-      combinedMarkdown += `# Page ${i + 1}\n\n` + (pageMd || pageText || "");
+
+      // Prefer explicit page.index if present, else fallback to loop index
+      const pageNumber =
+        typeof page.index === "number" ? page.index + 1 : i + 1;
+
+      combinedMarkdown +=
+        `# Page ${pageNumber}\n\n` + (pageMd || pageText || "");
     }
   }
 

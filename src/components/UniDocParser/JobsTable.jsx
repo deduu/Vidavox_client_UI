@@ -13,7 +13,22 @@ function extractFilename(fullFilename) {
   return fullFilename.replace(uuidPattern, "");
 }
 
-export default function JobsTable({ jobs, onSelectJob }) {
+export default function JobsTable({ jobs, onSelectJob, onDeleteJobs }) {
+  const [selectedIds, setSelectedIds] = React.useState([]);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.length === 0) return;
+    if (window.confirm(`Delete ${selectedIds.length} job(s)?`)) {
+      onDeleteJobs(selectedIds);
+      setSelectedIds([]); // clear after delete
+    }
+  };
   if (!jobs || jobs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-4 text-gray-500">
@@ -45,63 +60,86 @@ export default function JobsTable({ jobs, onSelectJob }) {
       {/* Desktop Table View */}
       <div className="hidden lg:block">
         <div className="overflow-y-auto max-h-full">
+          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 border-b border-gray-200">
+            <span className="text-sm font-medium text-gray-700">
+              Job History
+            </span>
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Delete Selected
+              </button>
+            )}
+          </div>
+
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+            <thead>
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                  #
+                <th className="px-3 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === jobs.length}
+                    onChange={(e) =>
+                      setSelectedIds(
+                        e.target.checked ? jobs.map((j) => j.id) : []
+                      )
+                    }
+                  />
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  File
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
-                  Date
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
-                  Status
-                </th>
+                <th className="px-3 py-3">File</th>
+                <th className="px-3 py-3">Date</th>
+                <th className="px-3 py-3">Status</th>
+                <th className="px-3 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody>
               {jobs.map((job, idx) => (
                 <tr
                   key={job.id}
-                  onClick={() => onSelectJob(job)}
-                  className="cursor-pointer hover:bg-blue-50 transition-colors duration-150"
+                  onClick={(e) => {
+                    // Prevent row click if clicked inside a checkbox or button
+                    if (
+                      e.target.tagName === "INPUT" ||
+                      e.target.tagName === "BUTTON" ||
+                      e.target.closest("button")
+                    ) {
+                      return;
+                    }
+                    onSelectJob(job);
+                  }}
+                  className="cursor-pointer hover:bg-blue-50"
                 >
-                  <td className="px-3 py-3 text-gray-500 font-medium">
-                    {idx + 1}
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(job.id)}
+                      onChange={() => toggleSelect(job.id)}
+                      onClick={(e) => e.stopPropagation()} // stop row click
+                    />
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex flex-col">
-                      <span
-                        className="text-gray-900 font-medium truncate max-w-xs"
-                        title={extractFilename(job.source_file_name)}
-                      >
-                        {extractFilename(job.source_file_name)}
-                      </span>
-                      {job.error_message && (
-                        <span
-                          className="text-xs text-red-500 truncate max-w-xs mt-1"
-                          title={job.error_message}
-                        >
-                          {job.error_message}
-                        </span>
-                      )}
-                    </div>
+                    {extractFilename(job.source_file_name)}
                   </td>
-                  <td className="px-3 py-3 text-gray-500 text-xs">
-                    {new Date(job.created_at).toLocaleDateString()}
-                    <br />
-                    <span className="text-gray-400">
-                      {new Date(job.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                  <td className="px-3 py-3">
+                    {new Date(job.created_at).toLocaleString()}
                   </td>
                   <td className="px-3 py-3">
                     <StatusBadge status={job.status} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation(); // prevent row selection
+                        if (window.confirm("Delete this job?")) {
+                          onDeleteJobs([job.id]);
+                        }
+                      }}
+                      className="text-red-500 hover:underline text-sm"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
