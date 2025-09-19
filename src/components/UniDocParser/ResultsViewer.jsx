@@ -294,33 +294,6 @@ export default function ResultsViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [pages.length, onToggleFullscreen]);
 
-  // if (!current) {
-  //   return (
-  //     <div className="h-full flex flex-col">
-  //       <div
-  //         className={`${THEME.glass} h-full flex flex-col items-center justify-center rounded-2xl shadow-xl p-16 text-center backdrop-blur-md border border-white/20`}
-  //       >
-  //         <div className="relative">
-  //           <div className="text-6xl mb-4 opacity-60">📄</div>
-  //           <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-  //             <span className="text-white text-xs">!</span>
-  //           </div>
-  //         </div>
-  //         <h3 className="text-xl font-semibold text-gray-700 mb-2">
-  //           No Pages Available
-  //         </h3>
-  //         <p className="text-gray-500 text-base mb-4">
-  //           Upload a document to begin extraction
-  //         </p>
-  //         <div className="flex flex-col gap-2 text-sm text-gray-400">
-  //           <span>• Supported formats: PDF, DOC, DOCX</span>
-  //           <span>• Maximum file size: 50MB</span>
-  //         </div>
-  //       </div>
-  //     </div>
-  //   );
-  // }
-
   // Determine grid layout based on view mode
   const getGridClasses = () => {
     switch (viewMode) {
@@ -338,35 +311,38 @@ export default function ResultsViewer({
     <div
       className={`${THEME.glass} h-full min-h-0 flex flex-col overflow-hidden shadow-xl backdrop-blur-md border border-white/20 transition-all duration-300 hover:shadow-2xl ${className}`}
     >
-      {/* Unified Header */}
+      {/* Unified Header - FIXED VERSION */}
       <div
-        className={`${THEME.softBar} px-6 py-4 border-b border-white/10 bg-gradient-to-r from-blue-50/50 to-purple-50/30`}
+        className={`${THEME.softBar} px-4 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-gradient-to-r from-blue-50/50 to-purple-50/30`}
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* LEFT: File info & page navigation */}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center flex-1 min-w-0">
-            {/* File Info */}
+        {/* Mobile-first layout with proper responsive breakpoints */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
+          {/* TOP ROW: File info + Page navigation (mobile: stacked, lg: side by side) */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
+            {/* File Info - with proper truncation */}
             {file && (
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="relative">
-                  <div className="text-blue-500 text-3xl p-3 bg-gradient-to-br from-blue-100 to-blue-50 backdrop-blur border border-blue-200/50 shadow-sm">
+              <div className="flex items-center gap-3 min-w-0 flex-shrink">
+                <div className="relative flex-shrink-0">
+                  <div className="text-blue-500 text-2xl sm:text-3xl p-2 sm:p-3 bg-gradient-to-br from-blue-100 to-blue-50 backdrop-blur border border-blue-200/50 shadow-sm">
                     📄
                   </div>
+
                   {isCompleted && (
-                    <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500  flex items-center justify-center shadow-lg">
+                    <div className="absolute -top-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 bg-green-500 flex items-center justify-center shadow-lg">
                       <span className="text-white text-xs">✓</span>
                     </div>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <h2 className="text-xl font-bold text-gray-800 truncate bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text">
+
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-800 truncate bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text">
                     {file.name}
                   </h2>
-                  <div className="flex items-center gap-3 text-sm text-gray-600 mt-1 flex-wrap">
-                    <span className="font-medium px-2 py-1 bg-gray-100 rounded-md">
+                  <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mt-1 flex-wrap">
+                    <span className="font-medium px-2 py-1 bg-gray-100 rounded-md whitespace-nowrap">
                       {formatBytes(file.size)}
                     </span>
-                    <span className="font-medium px-2 py-1 bg-blue-100 rounded-md text-blue-700">
+                    <span className="font-medium px-2 py-1 bg-blue-100 rounded-md text-blue-700 whitespace-nowrap">
                       {stats.pages} pages
                     </span>
                     <StatusPill isCompleted={isCompleted} />
@@ -375,16 +351,17 @@ export default function ResultsViewer({
               </div>
             )}
 
-            {/* Page Navigation */}
-            <div className="flex items-center gap-2 ml-0 lg:ml-6">
+            {/* Page Navigation - responsive sizing */}
+            <div className="flex items-center gap-2 flex-shrink-0 self-start sm:self-auto">
               <EnhancedToolbarBtn
                 title="Previous page (←)"
                 onClick={() => setActivePage((p) => Math.max(0, p - 1))}
                 disabled={activePage === 0}
                 icon="◀️"
               />
-              <div className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-semibold shadow-lg border border-blue-400">
+              <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg border border-blue-400 whitespace-nowrap">
                 <span className="hidden sm:inline">Page </span>
+                <span className="sm:hidden">P</span>
                 {activePage + 1} / {pages.length}
               </div>
               <EnhancedToolbarBtn
@@ -398,16 +375,21 @@ export default function ResultsViewer({
             </div>
           </div>
 
-          {/* RIGHT: Controls */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Stats */}
-            <StatChip icon="⏱️" label="Processing" value={stats.time || "—"} />
+          {/* BOTTOM ROW: Controls - stack on mobile, horizontal on larger screens */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 border-t border-gray-200/50 pt-3 lg:border-t-0 lg:pt-0">
+            {/* Stats + Divider */}
+            <div className="flex items-center gap-3">
+              <StatChip
+                icon="⏱️"
+                label="Processing"
+                value={stats.time || "—"}
+              />
+              <div className="hidden sm:block w-px h-8 bg-gray-200/50"></div>
+            </div>
 
-            <div className="w-px h-8 bg-gray-200/50"></div>
-
-            {/* View Mode */}
+            {/* View Mode - compact on mobile */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-600 hidden sm:inline">
+              <span className="text-xs sm:text-sm font-medium text-gray-600 hidden md:inline whitespace-nowrap">
                 View:
               </span>
               <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
@@ -434,75 +416,73 @@ export default function ResultsViewer({
               </div>
             </div>
 
-            {/* Display Controls */}
-            <div className="flex items-center gap-2">
-              <EnhancedSegBtn
-                active={mode === "fit-width"}
-                onClick={() => setMode("fit-width")}
-                title="Fit to width"
-              >
-                📐
-              </EnhancedSegBtn>
-              <EnhancedSegBtn
-                active={mode === "fit-page"}
-                onClick={() => setMode("fit-page")}
-                title="Fit to page"
-                divider
-              >
-                🖼️
-              </EnhancedSegBtn>
-              <EnhancedSegBtn
-                active={mode === "manual"}
-                onClick={() => setMode("manual")}
-                title="Manual zoom"
-                divider
-              >
-                🔍
-              </EnhancedSegBtn>
+            {/* Display Controls - responsive grouping */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-0 border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
+                <EnhancedSegBtn
+                  active={mode === "fit-width"}
+                  onClick={() => setMode("fit-width")}
+                  title="Fit to width"
+                >
+                  <span className="hidden sm:inline">📐</span>
+                  <span className="sm:hidden text-xs">W</span>
+                </EnhancedSegBtn>
+                <EnhancedSegBtn
+                  active={mode === "fit-page"}
+                  onClick={() => setMode("fit-page")}
+                  title="Fit to page"
+                  divider
+                >
+                  <span className="hidden sm:inline">🖼️</span>
+                  <span className="sm:hidden text-xs">P</span>
+                </EnhancedSegBtn>
+                <EnhancedSegBtn
+                  active={mode === "manual"}
+                  onClick={() => setMode("manual")}
+                  title="Manual zoom"
+                  divider
+                >
+                  <span className="hidden sm:inline">🔍</span>
+                  <span className="sm:hidden text-xs">Z</span>
+                </EnhancedSegBtn>
+              </div>
+
+              {mode === "manual" && (
+                <select
+                  value={zoom}
+                  onChange={(e) => setZoom(parseFloat(e.target.value))}
+                  className="border border-gray-200 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium bg-white shadow-sm min-w-0"
+                >
+                  {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map((z) => (
+                    <option key={z} value={z}>
+                      {z * 100}%
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            {mode === "manual" && (
-              <select
-                value={zoom}
-                onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium bg-white shadow-sm"
+            {/* Utility controls - compact group */}
+            <div className="flex items-center gap-2">
+              {/* Annotation toggle */}
+              <EnhancedToggle
+                checked={showBoxes}
+                onChange={setShowBoxes}
+                label="Annotations"
+                labelClass="hidden sm:inline"
+                title="Toggle annotation boxes"
+              />
+
+              <EnhancedIconOnly
+                title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                ariaLabel={
+                  isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                }
+                onClick={onToggleFullscreen}
               >
-                {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map((z) => (
-                  <option key={z} value={z}>
-                    {z * 100}%
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {/* Annotation toggle */}
-            <EnhancedToggle
-              checked={showBoxes}
-              onChange={setShowBoxes}
-              label="Annotations"
-              title="Toggle annotation boxes"
-            />
-
-            {/* Utility buttons */}
-            <EnhancedIconOnly
-              title="Keyboard shortcuts"
-              ariaLabel="Show keyboard shortcuts"
-              onClick={() =>
-                alert(
-                  "Keyboard shortcuts:\n← → : Navigate pages\nCtrl+F : Toggle fullscreen"
-                )
-              }
-            >
-              ⌨️
-            </EnhancedIconOnly>
-
-            <EnhancedIconOnly
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              ariaLabel={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              onClick={onToggleFullscreen}
-            >
-              {isFullscreen ? "🗗" : "🗖"}
-            </EnhancedIconOnly>
+                {isFullscreen ? "🗗" : "🗖"}
+              </EnhancedIconOnly>
+            </div>
           </div>
         </div>
       </div>
@@ -533,6 +513,12 @@ export default function ResultsViewer({
                     <div className="text-center">
                       <div className="text-4xl mb-2 opacity-60">📄</div>
                       <p>No pages available</p>
+                      {!isCompleted && (
+                        <div className="mt-3 flex items-center gap-2 text-blue-600 justify-center">
+                          <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                          <span className="text-sm">Processing...</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (

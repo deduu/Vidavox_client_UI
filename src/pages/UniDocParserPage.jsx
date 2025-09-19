@@ -226,14 +226,14 @@ export default function UniDocParserPage() {
                 )}
 
                 {leftPanelTab === "history" && (
-                  <div className="h-full flex flex-col">
-                    {/* Status Banner */}
+                  <div className="h-full flex flex-col overflow-hidden">
+                    {/* Status Banner - Fixed height, no flex grow */}
                     {selectedJobResult && (
                       <div className="flex-shrink-0 mx-4 mt-4 mb-2">
-                        <div className="bg-blue-50 border border-blue-200 p-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                           <div className="flex items-center">
                             <svg
-                              className="w-5 h-5 text-blue-600 mr-2"
+                              className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0"
                               fill="currentColor"
                               viewBox="0 0 20 20"
                             >
@@ -243,17 +243,18 @@ export default function UniDocParserPage() {
                                 clipRule="evenodd"
                               />
                             </svg>
-                            <div>
-                              <p className="text-sm font-medium text-blue-900">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-blue-900 truncate">
                                 Job Selected
                               </p>
-                              <p className="text-xs text-blue-700">
+                              <p className="text-xs text-blue-700 truncate">
                                 Viewing previous extraction results
                               </p>
                             </div>
                             <button
                               onClick={() => setSelectedJobResult(null)}
-                              className="ml-auto text-blue-400 hover:text-blue-600"
+                              className="ml-3 flex-shrink-0 text-blue-400 hover:text-blue-600 transition-colors"
+                              title="Clear selection"
                             >
                               <svg
                                 className="w-4 h-4"
@@ -274,14 +275,31 @@ export default function UniDocParserPage() {
                       </div>
                     )}
 
-                    {/* Jobs Table */}
-                    <div className="flex-1 min-h-0 overflow-hidden">
+                    {/* Jobs Table Container - Takes remaining height */}
+                    <div className="flex-1 min-h-0 overflow-auto">
                       <JobsTable
                         jobs={jobs}
                         onSelectJob={handleSelectJob}
                         onDeleteJobs={handleDeleteJobs}
                       />
-                      ;
+                    </div>
+
+                    {/* Optional: Add a footer with stats */}
+                    <div className="flex-shrink-0 border-t border-gray-100 px-4 py-2 bg-gray-50">
+                      <p className="text-xs text-gray-500 text-center">
+                        {jobs.length} {jobs.length === 1 ? "job" : "jobs"} total
+                        {jobs.filter((job) => job.status === "completed")
+                          .length > 0 && (
+                          <span className="ml-2">
+                            •{" "}
+                            {
+                              jobs.filter((job) => job.status === "completed")
+                                .length
+                            }{" "}
+                            completed
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 )}

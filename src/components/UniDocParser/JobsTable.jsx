@@ -73,78 +73,85 @@ export default function JobsTable({ jobs, onSelectJob, onDeleteJobs }) {
               </button>
             )}
           </div>
-
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr>
-                <th className="px-3 py-3 w-8">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.length === jobs.length}
-                    onChange={(e) =>
-                      setSelectedIds(
-                        e.target.checked ? jobs.map((j) => j.id) : []
-                      )
-                    }
-                  />
-                </th>
-                <th className="px-3 py-3">File</th>
-                <th className="px-3 py-3">Date</th>
-                <th className="px-3 py-3">Status</th>
-                <th className="px-3 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job, idx) => (
-                <tr
-                  key={job.id}
-                  onClick={(e) => {
-                    // Prevent row click if clicked inside a checkbox or button
-                    if (
-                      e.target.tagName === "INPUT" ||
-                      e.target.tagName === "BUTTON" ||
-                      e.target.closest("button")
-                    ) {
-                      return;
-                    }
-                    onSelectJob(job);
-                  }}
-                  className="cursor-pointer hover:bg-blue-50"
-                >
-                  <td className="px-3 py-3">
+          <div className="overflow-x-auto max-h-full">
+            <table className="min-w-full text-sm table-fixed">
+              <thead>
+                <tr>
+                  <th className="px-3 py-3 w-8">
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(job.id)}
-                      onChange={() => toggleSelect(job.id)}
-                      onClick={(e) => e.stopPropagation()} // stop row click
+                      checked={selectedIds.length === jobs.length}
+                      onChange={(e) =>
+                        setSelectedIds(
+                          e.target.checked ? jobs.map((j) => j.id) : []
+                        )
+                      }
                     />
-                  </td>
-                  <td className="px-3 py-3">
-                    {extractFilename(job.source_file_name)}
-                  </td>
-                  <td className="px-3 py-3">
-                    {new Date(job.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-3">
-                    <StatusBadge status={job.status} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation(); // prevent row selection
-                        if (window.confirm("Delete this job?")) {
-                          onDeleteJobs([job.id]);
-                        }
-                      }}
-                      className="text-red-500 hover:underline text-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
+                  </th>
+                  <th className="px-3 py-3 w-2/5 text-left">File</th>
+                  <th className="px-3 py-3 w-1/4 text-left">Date</th>
+                  <th className="px-3 py-3 w-1/5 text-left">Status</th>
+                  <th className="px-3 py-3 w-1/6 text-left">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {jobs.map((job, idx) => (
+                  <tr
+                    key={job.id}
+                    onClick={(e) => {
+                      // Prevent row click if clicked inside a checkbox or button
+                      if (
+                        e.target.tagName === "INPUT" ||
+                        e.target.tagName === "BUTTON" ||
+                        e.target.closest("button")
+                      ) {
+                        return;
+                      }
+                      onSelectJob(job);
+                    }}
+                    className="cursor-pointer hover:bg-blue-50"
+                  >
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(job.id)}
+                        onChange={() => toggleSelect(job.id)}
+                        onClick={(e) => e.stopPropagation()} // stop row click
+                      />
+                    </td>
+                    <td className="px-3 py-3 max-w-xs">
+                      <span
+                        className="truncate block"
+                        title={extractFilename(job.source_file_name)}
+                      >
+                        {extractFilename(job.source_file_name)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-gray-600">
+                      {new Date(job.created_at).toLocaleString()}
+                    </td>
+
+                    <td className="px-3 py-3">
+                      <StatusBadge status={job.status} />
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-right">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // prevent row selection
+                          if (window.confirm("Delete this job?")) {
+                            onDeleteJobs([job.id]);
+                          }
+                        }}
+                        className="text-red-500 hover:underline text-sm"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

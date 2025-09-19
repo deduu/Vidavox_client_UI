@@ -372,7 +372,7 @@ export default function PageAnnotator({
   return (
     <div
       ref={wrapperRef}
-      className="relative w-full overflow-auto border border-gray-200/50 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 h-full shadow-inner"
+      className="relative w-full border border-gray-200/50 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 h-full shadow-inner"
     >
       <div className="relative inline-block min-w-full">
         {/* Loading overlay */}
