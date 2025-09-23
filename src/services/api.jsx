@@ -389,6 +389,87 @@ export async function sendChatMessage({
   return data; // Should be: { answer: string, ... }
 }
 
+export async function* sendChatMessageStream({
+  message,
+  knowledgeBaseFileIds,
+  topK,
+  threshold,
+  session_id,
+  file,
+  signal,
+}) {
+  const fd = new FormData();
+  fd.append("query", message);
+  fd.append("prompt_type", "agentic");
+  fd.append("search_mode", "hybrid");
+  fd.append("top_k", String(topK));
+  fd.append("threshold", String(threshold));
+  fd.append("session_id", session_id || "default");
+  fd.append("stream", "true"); // 👈 important
+
+  for (const fileId of knowledgeBaseFileIds) {
+    fd.append("prefixes", fileId);
+  }
+
+  if (file) {
+    fd.append("file", file);
+  }
+
+  const requestInit = {
+    method: "POST",
+    headers: { ...authHeader() }, // don't set Content-Type manually
+    body: fd,
+    signal,
+  };
+
+  const res = await fetch(`${API_URL}/analysis/perform_rag`, requestInit);
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    let err;
+    try {
+      err = JSON.parse(errText);
+    } catch {
+      err = { detail: errText || res.statusText };
+    }
+    throw new Error(err.detail || "perform_rag stream failed");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buf = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buf += decoder.decode(value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop() || "";
+
+    for (const chunk of parts) {
+      if (!chunk.startsWith("data:")) continue;
+      const jsonStr = chunk.replace(/^data:\s*/, "");
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.type === "partial") {
+          yield parsed.content; // treat as raw text
+        } else if (parsed.type === "final") {
+          let finalObj;
+          try {
+            finalObj = JSON.parse(parsed.content);
+          } catch {
+            finalObj = { answer: parsed.content };
+          }
+          yield finalObj;
+        }
+      } catch (e) {
+        console.warn("⚠️ Bad SSE chunk:", chunk, e);
+      }
+    }
+  }
+}
+
 export async function sendChat({ question, folder_ids, file_ids }) {
   const res = await fetch(`${API_URL}/chat/`, {
     method: "POST",

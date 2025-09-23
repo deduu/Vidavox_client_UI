@@ -6,6 +6,7 @@ import {
   chatDirect,
   chatDirectStream,
   uploadAttachment,
+  sendChatMessageStream,
 } from "../services/api";
 import { useChatSession } from "../contexts/ChatSessionContext";
 
@@ -210,33 +211,110 @@ export const useChatActions = ({
     threshold,
     streaming,
   ]);
-
   const handleKnowledgeBaseChat = async (userMsg, sessionId, signal) => {
     const allFileIds = selectedKbs.flatMap((kb) => kb.files.map((f) => f.id));
-
     console.log("🔍 Using KBs:", allFileIds);
+
     setTyping(true);
 
-    const res = await sendChatMessage({
+    // payload shared by both streaming / non-streaming
+    const payload = {
       message: userMsg.content,
       knowledgeBaseFileIds: allFileIds,
       topK,
       threshold,
       session_id: sessionId,
       signal: signal,
-    });
-
-    const assistantMsg = {
-      role: "assistant",
-      content: res.response.answer,
-      citations: res.response.citations || [],
-      chunks: res.response.used_chunks || [],
     };
 
-    await maybeAutoRenameChat(userMsg);
-    await sendChatMessageToBackend(assistantMsg);
-    setTyping(false);
+    // if streaming mode is enabled (same logic as direct chat)
+    if (streaming) {
+      let gotFirst = false;
+      let assistantMsg = {
+        role: "assistant",
+        content: "",
+        citations: [],
+        chunks: [],
+      };
+
+      for await (const token of sendChatMessageStream(payload)) {
+        if (typeof token === "string") {
+          // streaming partial text
+          if (!gotFirst) {
+            gotFirst = true;
+            setTyping(false);
+            assistantMsg = { role: "assistant", content: token };
+            setHistory((prev) => [...prev, assistantMsg]);
+          } else {
+            assistantMsg.content += token;
+            setHistory((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = { ...assistantMsg };
+              return copy;
+            });
+          }
+        } else if (token && typeof token === "object") {
+          // final object
+          assistantMsg.content = token.answer || assistantMsg.content;
+          assistantMsg.citations = token.citations || [];
+          assistantMsg.chunks = token.used_chunks || [];
+          setHistory((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = { ...assistantMsg };
+            return copy;
+          });
+        }
+
+        if (isAtBottomRef.current) {
+          scrollToBottom();
+        }
+      }
+
+      await maybeAutoRenameChat(userMsg);
+      await sendChatMessageToBackend(assistantMsg);
+    } else {
+      // fallback: non-streaming
+      const res = await sendChatMessage(payload);
+
+      const assistantMsg = {
+        role: "assistant",
+        content: res.response.answer,
+        citations: res.response.citations || [],
+        chunks: res.response.used_chunks || [],
+      };
+
+      await maybeAutoRenameChat(userMsg);
+      await sendChatMessageToBackend(assistantMsg);
+      setTyping(false);
+    }
   };
+
+  // const handleKnowledgeBaseChat = async (userMsg, sessionId, signal) => {
+  //   const allFileIds = selectedKbs.flatMap((kb) => kb.files.map((f) => f.id));
+
+  //   console.log("🔍 Using KBs:", allFileIds);
+  //   setTyping(true);
+
+  //   const res = await sendChatMessage({
+  //     message: userMsg.content,
+  //     knowledgeBaseFileIds: allFileIds,
+  //     topK,
+  //     threshold,
+  //     session_id: sessionId,
+  //     signal: signal,
+  //   });
+
+  //   const assistantMsg = {
+  //     role: "assistant",
+  //     content: res.response.answer,
+  //     citations: res.response.citations || [],
+  //     chunks: res.response.used_chunks || [],
+  //   };
+
+  //   await maybeAutoRenameChat(userMsg);
+  //   await sendChatMessageToBackend(assistantMsg);
+  //   setTyping(false);
+  // };
 
   const handleDirectChat = async (
     userMsg,
