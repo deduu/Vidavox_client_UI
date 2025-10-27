@@ -21,7 +21,7 @@ export const useChatPageState = (defaultModel) => {
   const [missingApiKey, setMissingApiKey] = useState(null);
 
   // Model parameters
-  const [streaming, setStreaming] = useState(true);
+  const [streaming, setStreaming] = useState(false);
   const [maxTokens, setMaxTokens] = useState(2048);
   const [temperature, setTemperature] = useState(0.8);
 

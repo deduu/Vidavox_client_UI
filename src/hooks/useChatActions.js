@@ -243,7 +243,12 @@ export const useChatActions = ({
           if (!gotFirst) {
             gotFirst = true;
             setTyping(false);
-            assistantMsg = { role: "assistant", content: token };
+            assistantMsg = {
+              role: "assistant",
+              content: token,
+              citations: [],
+              chunks: [],
+            };
             setHistory((prev) => [...prev, assistantMsg]);
           } else {
             assistantMsg.content += token;
