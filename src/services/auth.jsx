@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { api } from "./api_b";
+import { api } from "./api";
 
 const AuthContext = createContext();
 
@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
     initialize();
   }, []);
 
-    /* --------  Global 401 → force logout  -------- */
+  /* --------  Global 401 → force logout  -------- */
   useEffect(() => {
     const handler = () => logout();
     window.addEventListener("unauthorized", handler);

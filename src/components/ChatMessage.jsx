@@ -3,15 +3,15 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
 import MessageActions from "./MessageActions";
-import { FileText } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { FileText, Brain, ChevronDown } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import CodeRenderer from "../renderer/CodeRenderer";
 import CodeBlock from "../renderer/CodeBlock";
 
 // === Bubble layout settings ===
-// Use any Tailwind percentage / ch / rem etc.
 const USER_BUBBLE_MAX = "max-w-[80%] lg:max-w-[65%]";
 const ASSIST_BUBBLE_MAX = "max-w-[82%] lg:max-w-[70%]";
+
 /* =========================
  * Format-specific Renderers
  * ========================= */
@@ -42,7 +42,6 @@ const MarkdownRenderer = ({ content }) => (
   <div className="prose max-w-none">
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      // IMPORTANT: allow spans + classes so hljs can color text
       rehypePlugins={[
         [
           rehypeSanitize,
@@ -82,7 +81,6 @@ const MarkdownRenderer = ({ content }) => (
           const hasNewline = raw.includes("\n");
           const tiny = raw.trim().length <= 40;
 
-          // Treat short, single-line snippets as inline code even if parsed oddly
           if (inline || (!hasNewline && tiny && !lang)) {
             return (
               <code
@@ -121,21 +119,65 @@ const HtmlRenderer = ({ content }) => (
       <summary className="cursor-pointer text-sm text-gray-600 mb-2">
         HTML Content
       </summary>
-      <pre className="text-xs overflow-x-auto">
+      <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
         <code>{content}</code>
       </pre>
     </details>
   </div>
 );
 
-// const CodeRenderer = ({ content, language }) => (
-//   <div className="bg-gray-900 text-green-400 p-3 rounded">
-//     <div className="text-xs text-gray-400 mb-2">{language || "Code"}</div>
-//     <pre className="text-sm overflow-x-auto">
-//       <code>{content}</code>
-//     </pre>
-//   </div>
-// );
+/* =========================
+ * Professional Thinking Block Component
+ * ========================= */
+const ThinkingBlock = ({ reasoning, autoExpanded, onToggle, isStreaming }) => {
+  const [isOpen, setIsOpen] = useState(autoExpanded);
+
+  useEffect(() => {
+    setIsOpen(autoExpanded);
+  }, [autoExpanded]);
+
+  const handleToggle = () => {
+    const newState = !isOpen;
+    setIsOpen(newState);
+    onToggle?.(newState);
+  };
+
+  return (
+    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg shadow-sm">
+      <button
+        onClick={handleToggle}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/50 transition-colors duration-200 group"
+        aria-expanded={isOpen}
+        aria-label="Toggle reasoning section"
+      >
+        <div className="flex items-center gap-2.5">
+          <Brain className="w-4 h-4 text-indigo-600" strokeWidth={2} />
+          <span className="font-semibold text-gray-700 text-sm">
+            Reasoning Process
+          </span>
+          <span className="text-xs text-gray-500 font-normal">
+            ({reasoning.split(/\s+/).length} words)
+          </span>
+        </div>
+        <ChevronDown
+          className={`w-4 h-4 text-indigo-600 transition-transform duration-200 ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="px-4 pb-4 pt-1">
+          <div className="bg-white rounded-md p-3 border border-indigo-100">
+            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono max-h-[400px] overflow-y-auto">
+              {reasoning}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* =========================
  * Attachment helpers
@@ -150,72 +192,15 @@ const isProbablyImage = (att) => {
   return /\.(png|jpe?g|gif|webp|bmp|tiff|svg)$/i.test(name);
 };
 
-// Prefer object/blob preview, then server URL
-const attachmentSrc = (att) =>
-  att?.meta?.display_url ||
-  // att?.display_url ||
-  // att?.displayUrl ||
-  // att?.url ||
-  null;
-
-/* =========================
- * Content Auto-Detection
- * ========================= */
-const renderContent = (msg) => {
-  const content = typeof msg.content === "string" ? msg.content.trim() : "";
-  if (!content) return <TextRenderer content="" />;
-
-  // JSON
-  try {
-    if (
-      msg.format === "json" ||
-      (content.startsWith("{") && content.endsWith("}")) ||
-      (content.startsWith("[") && content.endsWith("]"))
-    ) {
-      return <JsonRenderer content={content} />;
-    }
-  } catch {}
-
-  // HTML
-  if (
-    msg.format === "html" ||
-    (content.includes("<") && content.includes(">") && content.includes("/"))
-  ) {
-    return <HtmlRenderer content={content} />;
-  }
-
-  // Code
-  if (msg.format === "code" || msg.language) {
-    return <CodeRenderer content={content} language={msg.language} />;
-  }
-
-  const isProbablyMarkdown = (text) => {
-    return (
-      text.includes("```") ||
-      text.includes("**") ||
-      text.includes("# ") ||
-      text.match(/\[.+\]\((http.*)\)/) ||
-      text.match(/^\d+\.\s+/m) ||
-      text.match(/^[-*+]\s+/m)
-    );
-  };
-
-  // Markdown
-  if (msg.format === "markdown" || isProbablyMarkdown(content)) {
-    return <MarkdownRenderer content={content} />;
-  }
-
-  // Default plain text
-  return <TextRenderer content={content} />;
-};
+const attachmentSrc = (att) => att?.meta?.display_url || null;
 
 /* =========================
  * Chat Message Component
  * ========================= */
 export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
+  const [autoExpanded, setAutoExpanded] = useState(true);
   const isUser = msg.role === "user";
 
-  // Coerce attachments (in case server sent a string)
   const attachments = useMemo(() => {
     if (Array.isArray(msg.attachments)) return msg.attachments;
     if (typeof msg.attachments === "string") {
@@ -238,7 +223,13 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
     [attachments]
   );
 
-  // DEBUG: log on render when attachments exist
+  useEffect(() => {
+    if (msg.role === "assistant" && !msg.streaming) {
+      const timer = setTimeout(() => setAutoExpanded(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [msg.role, msg.streaming]);
+
   useEffect(() => {
     if (attachments.length) {
       console.log("🧩 ChatMessage render -> attachments", {
@@ -276,16 +267,111 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
     } catch {}
   }
 
+  const renderContent = (msg) => {
+    let content = typeof msg.content === "string" ? msg.content.trim() : "";
+    if (!content) return <TextRenderer content="" />;
+
+    // 🧠 Detect reasoning tags first (<thinking> or <think>)
+    const thinkingMatch = content.match(
+      /<(think|thinking)>([\s\S]*?)<\/(think|thinking)>/i
+    );
+
+    // Extract reasoning and visible part
+    const reasoning = thinkingMatch ? thinkingMatch[2].trim() : null;
+    const visiblePart = thinkingMatch
+      ? content.replace(thinkingMatch[0], "").trim()
+      : content;
+
+    // 🪄 Render collapsible reasoning if exists
+    const reasoningBlock = reasoning ? (
+      <ThinkingBlock
+        reasoning={reasoning}
+        autoExpanded={autoExpanded}
+        onToggle={setAutoExpanded}
+        isStreaming={msg.streaming}
+      />
+    ) : null;
+
+    // 🧩 Format detection (but only render visible part in bubble)
+    try {
+      if (
+        msg.format === "json" ||
+        (visiblePart.startsWith("{") && visiblePart.endsWith("}")) ||
+        (visiblePart.startsWith("[") && visiblePart.endsWith("]"))
+      ) {
+        return (
+          <div className="space-y-3">
+            {reasoningBlock}
+            <JsonRenderer content={visiblePart} />
+          </div>
+        );
+      }
+    } catch {}
+
+    if (
+      msg.format === "html" ||
+      (visiblePart.includes("<") &&
+        visiblePart.includes(">") &&
+        visiblePart.includes("/") &&
+        !visiblePart.match(/<\/?(think|thinking)>/i))
+    ) {
+      return (
+        <div
+          className={`inline-block rounded-lg p-3 shadow-sm ${
+            isUser
+              ? `bg-blue-100 text-right ${USER_BUBBLE_MAX}`
+              : `bg-gray-50 border ${ASSIST_BUBBLE_MAX}`
+          }`}
+        >
+          {reasoningBlock}
+          <HtmlRenderer content={visiblePart} />
+        </div>
+      );
+    }
+
+    if (msg.format === "code" || msg.language) {
+      return (
+        <div className="space-y-3">
+          {reasoningBlock}
+          <CodeRenderer content={visiblePart} language={msg.language} />
+        </div>
+      );
+    }
+
+    const isProbablyMarkdown = (text) =>
+      text.includes("```") ||
+      text.includes("**") ||
+      text.includes("# ") ||
+      text.match(/\[.+\]\((http.*)\)/) ||
+      text.match(/^\d+\.\s+/m) ||
+      text.match(/^[-*+]\s+/m);
+
+    if (msg.format === "markdown" || isProbablyMarkdown(visiblePart)) {
+      return (
+        <div className="space-y-3">
+          {reasoningBlock}
+          <MarkdownRenderer content={visiblePart} />
+        </div>
+      );
+    }
+
+    // Default plain text
+    return (
+      <div className="space-y-3">
+        {reasoningBlock}
+        <TextRenderer content={visiblePart} />
+      </div>
+    );
+  };
+
   return (
     <div className="mb-4">
-      {/* layout-only wrapper; aligns to the same container edges as your input,
-        because ChatPage already wraps messages in max-w-4xl mx-auto px-4 */}
       <div
         className={`w-full flex flex-col gap-2 ${
           isUser ? "items-end" : "items-start"
         }`}
       >
-        {/* ===== IMAGES BUBBLE (right for user) ===== */}
+        {/* ===== IMAGES BUBBLE ===== */}
         {imageAtts.length > 0 && (
           <div
             className={`inline-block rounded-lg p-2 shadow ${
@@ -343,7 +429,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
           </div>
         )}
 
-        {/* ===== NON-IMAGE FILES BUBBLE (right for user) ===== */}
+        {/* ===== NON-IMAGE FILES BUBBLE ===== */}
         {fileAtts.length > 0 && (
           <div
             className={`inline-block rounded-lg p-2 shadow ${
@@ -382,7 +468,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
           </div>
         )}
 
-        {/* ===== TEXT BUBBLE (right for user) ===== */}
+        {/* ===== TEXT BUBBLE ===== */}
         {(() => {
           const content =
             typeof msg.content === "string" ? msg.content.trim() : "";
@@ -390,12 +476,6 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
 
           return (
             <div
-              // className={`inline-block rounded-lg p-3 shadow ${
-              //   isUser
-              //     ? `bg-blue-100 text-right ${USER_BUBBLE_MAX}`
-              //     : `bg-gray-100 ${ASSIST_BUBBLE_MAX}`
-              // }`}
-
               className={`inline-block rounded-lg p-3  ${
                 isUser
                   ? `bg-blue-100 text-right ${USER_BUBBLE_MAX}`
@@ -423,7 +503,6 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
                 msg.citations.length > 0 && (
                   <ul className="mt-4 text-xs text-gray-500 space-y-2">
                     {msg.citations.map((c, i) => {
-                      // console.debug("📎 Rendering citation:", c);
                       if (!c?.source) {
                         return (
                           <li key={i} className="text-red-500">
@@ -451,13 +530,11 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
                               {fileName && ` › ${fileName}`}
                             </a>
                             {c.page && <> — Page {c.page}</>}
-                            {/* Quote */}
                             {c.quote && (
                               <blockquote className="ml-4 mt-1 italic text-gray-600 border-l-2 border-gray-300 pl-3">
                                 {c.quote}
                               </blockquote>
                             )}
-                            {/* PDF Preview Icon */}
                             {url.pathname.endsWith(".pdf") && (
                               <div className="ml-4 mt-1 flex items-center gap-2">
                                 <img

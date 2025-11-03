@@ -1,7 +1,7 @@
 // components/ChatMessages.jsx
 import React from "react";
 import ChatMessage from "../../components/ChatMessage";
-
+import { useState, useEffect } from "react";
 
 const ChatMessages = ({ history, typing, hasKnowledgeBases }) => {
   const handleCopy = (content) => {

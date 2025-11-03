@@ -165,7 +165,7 @@ export default function SidebarLayout({ children, bottomSlot, fit = false }) {
               }}
             />
             {/* Universal Document Parser tab */}
-            <NavButton
+            {/* <NavButton
               icon={<FilePlus size={18} />}
               label="UniDocParser"
               active={isActive("/unidocparser")}
@@ -176,7 +176,7 @@ export default function SidebarLayout({ children, bottomSlot, fit = false }) {
                 navigate("/unidocparser");
                 setOpen(false);
               }}
-            />
+            /> */}
 
             <NavButton
               icon={<Database size={18} />}

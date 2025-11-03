@@ -768,13 +768,34 @@ export async function deleteChatMessages(sessionId) {
 }
 
 // services/api.js (or wherever you keep helpers)
+// export async function listLLMs() {
+//   const res = await fetch(`${API_URL}/models`, {
+//     headers: { "Content-Type": "application/json", ...authHeader() },
+//   });
+//   const data = await res.json();
+//   if (!res.ok) throw new Error(data.detail || "Failed to load LLM list");
+//   return data;
+// }
+
 export async function listLLMs() {
-  const res = await fetch(`${API_URL}/llm/list`, {
+  const res = await fetch(`${API_URL}/models`, {
     headers: { "Content-Type": "application/json", ...authHeader() },
   });
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "Failed to load LLM list");
-  return data;
+
+  // Normalize to consistent format expected by UI
+  // OpenAI-compatible → {object: "list", data: [{id: "model", object: "model"}]}
+  const normalized =
+    data?.data?.map((m) => ({
+      id: m.id,
+      label: m.id
+        .replace(/[-_]/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase()), // make it readable
+    })) || data;
+
+  return normalized;
 }
 
 export async function getApiKeys() {
