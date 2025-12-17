@@ -266,9 +266,17 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
       msg.chunks = JSON.parse(msg.chunks);
     } catch {}
   }
+  const stripToolCalls = (text) =>
+    text.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "").trim();
+
+  const looksLikeHtml = (text) =>
+    /<\/?(div|p|span|pre|code|table|ul|ol|li|h1|h2|h3|blockquote|br)\b/i.test(
+      text
+    );
 
   const renderContent = (msg) => {
     let content = typeof msg.content === "string" ? msg.content.trim() : "";
+    content = stripToolCalls(content);
     if (!content) return <TextRenderer content="" />;
 
     // 🧠 Detect reasoning tags first (<thinking> or <think>)
@@ -310,9 +318,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
 
     if (
       msg.format === "html" ||
-      (visiblePart.includes("<") &&
-        visiblePart.includes(">") &&
-        visiblePart.includes("/") &&
+      (looksLikeHtml(visiblePart) &&
         !visiblePart.match(/<\/?(think|thinking)>/i))
     ) {
       return (

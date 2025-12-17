@@ -22,7 +22,7 @@ import { STORAGE, loadJSON, saveJSON } from "../../utils/persist";
 import PageAnnotator from "./PageAnnotator";
 
 // point to your *app* API, not the extractor
-const API_BASE = import.meta?.env?.VITE_APP_API_BASE || "http://localhost:8005";
+const API_BASE = import.meta?.env?.VITE_APP_API_BASE || "http://localhost:8010";
 
 // Updated toAbs function to handle authentication
 const toAbs = (url, authHeaders = {}) => {

@@ -353,34 +353,78 @@ export const useChatActions = ({
   const handleStreamingResponse = async (payload) => {
     setTyping(true);
     let gotFirst = false;
-    let assistantMsg = { role: "assistant", content: "" };
 
-    for await (const token of chatDirectStream(payload)) {
+    let inThink = false;
+    let reasoning = "";
+    let visible = "";
+
+    let assistantMsg = {
+      role: "assistant",
+      content: "",
+      reasoning: "",
+      streaming: true,
+    };
+
+    for await (const rawToken of chatDirectStream(payload)) {
+      if (typeof rawToken !== "string") continue;
+
+      let token = rawToken;
+
+      if (token.includes("<think>")) {
+        inThink = true;
+        token = token.replace("<think>", "");
+      }
+
+      if (token.includes("</think>")) {
+        inThink = false;
+        token = token.replace("</think>", "");
+      }
+
+      console.log("[STREAM] RAW TOKEN:", rawToken);
+      console.log("[STREAM] after strip:", token);
+      console.log("[STREAM] inThink:", inThink);
+
+      if (inThink) reasoning += token;
+      else visible += token;
+
+      console.log("[STREAM] reasoning so far:", reasoning);
+      console.log("[STREAM] visible so far:", visible);
+
+      // 4️⃣ ensure we push the message on the very first token
       if (!gotFirst) {
         gotFirst = true;
         setTyping(false);
-        assistantMsg = { role: "assistant", content: token };
-        // Update history with streaming message
+        assistantMsg = {
+          role: "assistant",
+          content: visible,
+          reasoning,
+          streaming: true,
+        };
         setHistory((prev) => [...prev, assistantMsg]);
-      } else {
-        assistantMsg.content += token;
-
-        // Update streaming content
-        setHistory((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { ...assistantMsg };
-          return copy;
-        });
+        continue;
       }
 
-      // Auto-scroll if at bottom
-      if (isAtBottomRef.current) {
-        console.log("⬇️ Auto-scrolling token because user is at bottom");
-        scrollToBottom();
-      } else {
-        console.log("⛔ Not auto-scrolling — user scrolled up");
-      }
+      // 5️⃣ update existing last message
+      assistantMsg.content = visible;
+      assistantMsg.reasoning = reasoning;
+
+      setHistory((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { ...assistantMsg };
+        return copy;
+      });
+
+      if (isAtBottomRef.current) scrollToBottom();
     }
+
+    assistantMsg.streaming = false;
+
+    // update final state in history
+    setHistory((prev) => {
+      const copy = [...prev];
+      copy[copy.length - 1] = { ...assistantMsg };
+      return copy;
+    });
 
     await sendChatMessageToBackend(assistantMsg);
   };
