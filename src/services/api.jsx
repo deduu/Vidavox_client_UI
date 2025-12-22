@@ -7,7 +7,7 @@ export const API_URL =
   (import.meta?.env?.VITE_API_BASE_URL &&
     import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")) ||
   // dev fallback
-  (isLocal ? "http://localhost:8005/v1" : "/v1"); // prod uses same-origin over HTTPS
+  (isLocal ? "http://localhost:8008/v1" : "/v1"); // prod uses same-origin over HTTPS
 
 function authHeader() {
   const token = localStorage.getItem("token");
@@ -876,6 +876,96 @@ export async function getJobSummary(jobId) {
   if (!res.ok)
     throw new Error(data?.detail || `Failed to fetch job ${jobId} summary`);
   return data;
+}
+
+/**
+ * Send chat completions request (non-streaming)
+ */
+export const chatCompletions = async (payload) => {
+  const { signal, ...body } = payload;
+
+  // API_URL is already "http://localhost:8008/v1", so we need to adjust the path
+  // Remove /v1 from API_URL and add the full path
+  const baseUrl = API_URL.replace(/\/v1$/, "");
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ...body, stream: false }),
+    signal: signal,
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  return await response.json();
+};
+
+/**
+ * Send chat completions request (streaming)
+ */
+export async function* chatCompletionsStream(payload) {
+  const { signal, ...body } = payload;
+
+  // API_URL is already "http://localhost:8008/v1", so we need to adjust the path
+  const baseUrl = API_URL.replace(/\/v1$/, "");
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ...body, stream: true }),
+    signal: signal,
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") return;
+
+        try {
+          const parsed = JSON.parse(data);
+
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+
+          yield parsed;
+        } catch (err) {
+          console.error("Failed to parse SSE chunk:", data, err);
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 // export async function extractDocument({ file }) {
 //   const token = localStorage.getItem("token");

@@ -2,15 +2,11 @@
 import { useCallback, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
-  sendChatMessage,
-  chatDirect,
-  chatDirectStream,
   uploadAttachment,
-  sendChatMessageStream,
+  chatCompletions,
+  chatCompletionsStream,
 } from "../services/api";
 import { useChatSession } from "../contexts/ChatSessionContext";
-
-let abortController = null;
 
 export const useChatActions = ({
   message,
@@ -144,14 +140,8 @@ export const useChatActions = ({
     if (!message.trim() && !hasAttachment) return;
 
     const sessionId = currentChatId || "default";
-    const imageUrls = uploaded
-      .filter((a) => isImageType(a.meta?.mime || a.meta?.type || a.file?.type))
-      .map((a) => a.meta.url);
-    const fileUrls = uploaded
-      .filter((a) => a.meta?.type !== "image")
-      .map((a) => a.meta.url);
-    const isVision = imageUrls.length > 0;
 
+    // Build user message with attachments
     const userMsg = {
       role: "user",
       content: message,
@@ -165,13 +155,15 @@ export const useChatActions = ({
     };
 
     await sendChatMessageToBackend(userMsg);
-    const baseHistory = [...history, userMsg];
+    await maybeAutoRenameChat(userMsg);
+
     setMessage("");
 
     // Clean up attachment previews
     setAttachments((prev) => {
       prev.forEach((a) => {
         if (a.displayUrl?.startsWith("blob:")) {
+          URL.revokeObjectURL(a.displayUrl);
           console.log("🧹 revoking composer blob preview", a.displayUrl);
         }
       });
@@ -181,17 +173,39 @@ export const useChatActions = ({
     setSending(true);
 
     try {
-      if (selectedKbs.length > 0) {
-        await handleKnowledgeBaseChat(userMsg, sessionId, signal);
+      // Build OpenAI-compatible messages format
+      const messages = [
+        ...history.map((h) => ({
+          role: h.role,
+          content: h.content,
+        })),
+        {
+          role: "user",
+          content: message,
+        },
+      ];
+
+      // Prepare payload for /v1/chat/completions
+      const payload = {
+        model: model || "Auto",
+        messages: messages,
+        stream: streaming,
+        max_tokens: maxTokens,
+        temperature: temperature,
+        session_id: sessionId,
+        // Include KB settings if applicable
+        ...(selectedKbs.length > 0 && {
+          selected_tools: ["get_vector_context"],
+          query_mode: "split_query",
+          do_rerank: true,
+        }),
+        signal: signal,
+      };
+
+      if (streaming) {
+        await handleStreamingResponse(payload);
       } else {
-        await handleDirectChat(
-          userMsg,
-          sessionId,
-          imageUrls,
-          fileUrls,
-          isVision,
-          signal
-        );
+        await handleNonStreamingResponse(payload);
       }
     } catch (err) {
       await handleChatError(err);
@@ -211,58 +225,27 @@ export const useChatActions = ({
     threshold,
     streaming,
   ]);
-  const handleKnowledgeBaseChat = async (userMsg, sessionId, signal) => {
-    const allFileIds = selectedKbs.flatMap((kb) => kb.files.map((f) => f.id));
-    console.log("🔍 Using KBs:", allFileIds);
 
+  const handleStreamingResponse = async (payload) => {
     setTyping(true);
+    let gotFirst = false;
+    let assistantMsg = { role: "assistant", content: "" };
 
-    // payload shared by both streaming / non-streaming
-    const payload = {
-      message: userMsg.content,
-      knowledgeBaseFileIds: allFileIds,
-      topK,
-      threshold,
-      session_id: sessionId,
-      signal: signal,
-    };
+    try {
+      for await (const chunk of chatCompletionsStream(payload)) {
+        // Parse SSE chunk
+        const delta = chunk.choices?.[0]?.delta;
+        const content = delta?.content || "";
 
-    // if streaming mode is enabled (same logic as direct chat)
-    if (streaming) {
-      let gotFirst = false;
-      let assistantMsg = {
-        role: "assistant",
-        content: "",
-        citations: [],
-        chunks: [],
-      };
+        if (!content) continue;
 
-      for await (const token of sendChatMessageStream(payload)) {
-        if (typeof token === "string") {
-          // streaming partial text
-          if (!gotFirst) {
-            gotFirst = true;
-            setTyping(false);
-            assistantMsg = {
-              role: "assistant",
-              content: token,
-              citations: [],
-              chunks: [],
-            };
-            setHistory((prev) => [...prev, assistantMsg]);
-          } else {
-            assistantMsg.content += token;
-            setHistory((prev) => {
-              const copy = [...prev];
-              copy[copy.length - 1] = { ...assistantMsg };
-              return copy;
-            });
-          }
-        } else if (token && typeof token === "object") {
-          // final object
-          assistantMsg.content = token.answer || assistantMsg.content;
-          assistantMsg.citations = token.citations || [];
-          assistantMsg.chunks = token.used_chunks || [];
+        if (!gotFirst) {
+          gotFirst = true;
+          setTyping(false);
+          assistantMsg = { role: "assistant", content: content };
+          setHistory((prev) => [...prev, assistantMsg]);
+        } else {
+          assistantMsg.content += content;
           setHistory((prev) => {
             const copy = [...prev];
             copy[copy.length - 1] = { ...assistantMsg };
@@ -270,131 +253,37 @@ export const useChatActions = ({
           });
         }
 
+        // Auto-scroll if at bottom
         if (isAtBottomRef.current) {
           scrollToBottom();
         }
       }
 
-      await maybeAutoRenameChat(userMsg);
       await sendChatMessageToBackend(assistantMsg);
-    } else {
-      // fallback: non-streaming
-      const res = await sendChatMessage(payload);
-
-      const assistantMsg = {
-        role: "assistant",
-        content: res.response.answer,
-        citations: res.response.citations || [],
-        chunks: res.response.used_chunks || [],
-      };
-
-      await maybeAutoRenameChat(userMsg);
-      await sendChatMessageToBackend(assistantMsg);
+    } catch (err) {
+      console.error("Streaming error:", err);
       setTyping(false);
+      throw err;
     }
-  };
-
-  // const handleKnowledgeBaseChat = async (userMsg, sessionId, signal) => {
-  //   const allFileIds = selectedKbs.flatMap((kb) => kb.files.map((f) => f.id));
-
-  //   console.log("🔍 Using KBs:", allFileIds);
-  //   setTyping(true);
-
-  //   const res = await sendChatMessage({
-  //     message: userMsg.content,
-  //     knowledgeBaseFileIds: allFileIds,
-  //     topK,
-  //     threshold,
-  //     session_id: sessionId,
-  //     signal: signal,
-  //   });
-
-  //   const assistantMsg = {
-  //     role: "assistant",
-  //     content: res.response.answer,
-  //     citations: res.response.citations || [],
-  //     chunks: res.response.used_chunks || [],
-  //   };
-
-  //   await maybeAutoRenameChat(userMsg);
-  //   await sendChatMessageToBackend(assistantMsg);
-  //   setTyping(false);
-  // };
-
-  const handleDirectChat = async (
-    userMsg,
-    sessionId,
-    imageUrls,
-    fileUrls,
-    isVision,
-    signal
-  ) => {
-    await maybeAutoRenameChat(userMsg);
-    const mustStream = streaming && !isVision;
-
-    const payload = {
-      model,
-      messages: [{ role: "user", content: userMsg.content }],
-      max_tokens: maxTokens,
-      temperature,
-      attached_image_urls: imageUrls,
-      attached_file_urls: fileUrls,
-      session_id: sessionId,
-      signal: signal,
-    };
-
-    if (mustStream) {
-      await handleStreamingResponse(payload);
-    } else {
-      await handleNonStreamingResponse(payload);
-    }
-  };
-
-  const handleStreamingResponse = async (payload) => {
-    setTyping(true);
-    let gotFirst = false;
-    let assistantMsg = { role: "assistant", content: "" };
-
-    for await (const token of chatDirectStream(payload)) {
-      if (!gotFirst) {
-        gotFirst = true;
-        setTyping(false);
-        assistantMsg = { role: "assistant", content: token };
-        // Update history with streaming message
-        setHistory((prev) => [...prev, assistantMsg]);
-      } else {
-        assistantMsg.content += token;
-
-        // Update streaming content
-        setHistory((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { ...assistantMsg };
-          return copy;
-        });
-      }
-
-      // Auto-scroll if at bottom
-      if (isAtBottomRef.current) {
-        console.log("⬇️ Auto-scrolling token because user is at bottom");
-        scrollToBottom();
-      } else {
-        console.log("⛔ Not auto-scrolling — user scrolled up");
-      }
-    }
-
-    await sendChatMessageToBackend(assistantMsg);
   };
 
   const handleNonStreamingResponse = async (payload) => {
     setTyping(true);
-    const reply = await chatDirect(payload);
-    const assistantMsg = {
-      role: "assistant",
-      content: reply.text,
-    };
 
-    await sendChatMessageToBackend(assistantMsg);
-    setTyping(false);
+    try {
+      const response = await chatCompletions(payload);
+      const content = response.choices?.[0]?.message?.content || "";
+
+      const assistantMsg = {
+        role: "assistant",
+        content: content,
+      };
+
+      await sendChatMessageToBackend(assistantMsg);
+      setHistory((prev) => [...prev, assistantMsg]);
+    } finally {
+      setTyping(false);
+    }
   };
 
   const handleChatError = async (err) => {
@@ -423,105 +312,6 @@ export const useChatActions = ({
     setTyping(false);
   };
 
-  const handleSendFileOnly = useCallback(
-    async (file) => {
-      const uploaded = attachments.find(
-        (a) =>
-          a.file?.name === file.name && a.meta?.url && !a.uploading && !a.error
-      );
-      if (!uploaded) return;
-
-      // Implementation similar to handleSend but for file-only
-      // ... (implementation details)
-
-      const sessionId = currentChatId || "default";
-      const imageUrls = uploaded
-        .filter((a) =>
-          isImageType(a.meta?.mime || a.meta?.type || a.file?.type)
-        )
-        .map((a) => a.meta.url);
-      const fileUrls = uploaded
-        .filter((a) => a.meta?.type !== "image")
-        .map((a) => a.meta.url);
-      const isVision = imageUrls.length > 0;
-
-      const userMsg = {
-        role: "user",
-        content: message,
-        attachments: uploaded.map((a) => ({
-          name: a.file?.name,
-          mime_type: a.file?.type,
-          url: a.meta?.url,
-          size_bytes: a.file?.size || null,
-          meta: { display_url: a.displayUrl },
-        })),
-      };
-      setHistory((prev) => [...prev, userMsg]);
-      await sendChatMessageToBackend(userMsg);
-      await maybeAutoRenameChat(userMsg);
-
-      setSending(true);
-      setTyping(true);
-
-      try {
-        const reply = await chatDirect({
-          model,
-          messages: [{ role: "user", content: "(sent an attachment)" }],
-          max_tokens: maxTokens,
-          temperature,
-          attached_image_urls:
-            uploaded.meta.type === "image" ? [uploaded.meta.url] : [],
-          attached_file_urls:
-            uploaded.meta.type !== "image" ? [uploaded.meta.url] : [],
-          session_id: sessionId,
-        });
-        const text = reply.text ?? "";
-
-        await sendChatMessageToBackend({ role: "assistant", content: text });
-        setHistory((prev) => [...prev, { role: "assistant", content: text }]);
-      } catch (err) {
-        console.error("sendFileOnly error:", err);
-        setHistory((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "⚠️ Something went wrong. Please try again.",
-          },
-        ]);
-      } finally {
-        setTyping(false);
-        setSending(false);
-        // in ChatPage.jsx where you clear the composer chips
-        setAttachments((prev) => {
-          prev.forEach((a) => {
-            if (a.displayUrl?.startsWith("blob:")) {
-              +console.log("🧹 revoking composer blob preview", a.displayUrl, {
-                name: a.file?.name,
-              });
-              URL.revokeObjectURL(a.displayUrl);
-            } else if (a.displayUrl) {
-              console.warn(
-                "⚠️ displayUrl is not a blob, not revoking",
-                a.displayUrl
-              );
-            }
-          });
-          return [];
-        });
-      }
-    },
-    [
-      attachments,
-      currentChatId,
-      message,
-      model,
-      maxTokens,
-      temperature,
-      setHistory,
-      setAttachments,
-    ]
-  );
-
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -546,35 +336,36 @@ export const useChatActions = ({
     });
   }, []);
 
-  const handleTopKChange = useCallback();
-  (val) => {
-    setTopK(val);
-    if (
-      !(val === 5 && threshold === 0.3) &&
-      !(val === 10 && threshold === 0.2) &&
-      !(val === 20 && threshold === 0.1)
-    ) {
-      setActivePreset(null);
-    }
-  },
-    [threshold, setTopK, setActivePreset];
+  const handleTopKChange = useCallback(
+    (val) => {
+      setTopK(val);
+      if (
+        !(val === 5 && threshold === 0.3) &&
+        !(val === 10 && threshold === 0.2) &&
+        !(val === 20 && threshold === 0.1)
+      ) {
+        setActivePreset(null);
+      }
+    },
+    [threshold, setTopK, setActivePreset]
+  );
 
-  const handleThresholdChange = useCallback();
-  (val) => {
-    setThreshold(val);
-    if (
-      !(topK === 5 && val === 0.3) &&
-      !(topK === 10 && val === 0.2) &&
-      !(topK === 20 && val === 0.1)
-    ) {
-      setActivePreset(null);
-    }
-  },
-    [topK, setThreshold, setActivePreset];
+  const handleThresholdChange = useCallback(
+    (val) => {
+      setThreshold(val);
+      if (
+        !(topK === 5 && val === 0.3) &&
+        !(topK === 10 && val === 0.2) &&
+        !(topK === 20 && val === 0.1)
+      ) {
+        setActivePreset(null);
+      }
+    },
+    [topK, setThreshold, setActivePreset]
+  );
 
   return {
     handleSend,
-    handleSendFileOnly,
     handlePasteImage,
     handleAttachFiles,
     handleRemoveAttachment,
