@@ -769,7 +769,7 @@ export async function deleteChatMessages(sessionId) {
 
 // services/api.js (or wherever you keep helpers)
 export async function listLLMs() {
-  const res = await fetch(`${API_URL}/llm/list`, {
+  const res = await fetch(`${API_URL}/list`, {
     headers: { "Content-Type": "application/json", ...authHeader() },
   });
   const data = await res.json();

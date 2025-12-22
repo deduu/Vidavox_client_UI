@@ -74,23 +74,23 @@ export const useChatPageState = (defaultModel) => {
   }, [currentChatId, availableModels, defaultModel]);
 
   // Load knowledge bases
-  useEffect(() => {
-    listKnowledgeBases()
-      .then((all) => {
-        setKbs(all);
+  // useEffect(() => {
+  //   listKnowledgeBases()
+  //     .then((all) => {
+  //       setKbs(all);
 
-        const isNewChat = activeChat?.title === "New Chat";
-        if (!isNewChat) {
-          const ids = loadPersistedKBs();
-          if (ids.length) {
-            setSelectedKbs(reconcileKBs(ids, all));
-          }
-        } else {
-          setSelectedKbs([]);
-        }
-      })
-      .catch((err) => console.error("❌ Failed to load KBs:", err));
-  }, [activeChat?.id]);
+  //       const isNewChat = activeChat?.title === "New Chat";
+  //       if (!isNewChat) {
+  //         const ids = loadPersistedKBs();
+  //         if (ids.length) {
+  //           setSelectedKbs(reconcileKBs(ids, all));
+  //         }
+  //       } else {
+  //         setSelectedKbs([]);
+  //       }
+  //     })
+  //     .catch((err) => console.error("❌ Failed to load KBs:", err));
+  // }, [activeChat?.id]);
 
   // Clear KBs for new chats
   useEffect(() => {

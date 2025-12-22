@@ -126,7 +126,7 @@ const CompactConfigBar = ({
       </div>
 
       {/* Knowledge Base Selection */}
-      <div className="flex items-center gap-2">
+      {/* <div className="flex items-center gap-2">
         <label className="text-xs font-medium text-gray-600 whitespace-nowrap">
           KB:
         </label>
@@ -136,7 +136,7 @@ const CompactConfigBar = ({
           onSelectionChange={setSelectedKbs}
           disabled={sending}
         />
-      </div>
+      </div> */}
 
       {/* KB Count indicator */}
       {hasKnowledgeBases && (
