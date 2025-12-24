@@ -21,7 +21,7 @@ export const useChatPageState = (defaultModel) => {
   const [missingApiKey, setMissingApiKey] = useState(null);
 
   // Model parameters
-  const [streaming, setStreaming] = useState(false);
+  const [streaming, setStreaming] = useState(true);
   const [maxTokens, setMaxTokens] = useState(2048);
   const [temperature, setTemperature] = useState(0.8);
 
@@ -51,12 +51,14 @@ export const useChatPageState = (defaultModel) => {
     if (!availableModels.length || !currentChatId) return;
 
     const exists = (id) => !!id && availableModels.some((m) => m.id === id);
+    console.log("Available models:", availableModels);
     const saved = getChatModel(currentChatId);
     const isNewChat = !saved;
 
     if (isNewChat) {
       const pick =
         (exists(defaultModel) && defaultModel) || availableModels[0]?.id;
+        console.log("Picking model for new chat:", pick);
       if (pick) {
         setModel(pick);
         saveChatModel(currentChatId, pick);

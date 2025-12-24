@@ -9,6 +9,14 @@ export const API_URL =
   // dev fallback
   (isLocal ? "http://localhost:8008/v1" : "/v1"); // prod uses same-origin over HTTPS
 
+// export const API_URL ="http://localhost:8008/v1"
+  // // allow override via env (e.g., staging)
+  // (import.meta?.env?.VITE_API_BASE_URL &&
+  //   import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")) ||
+  // // dev fallback
+  // (isLocal ? "http://localhost:8008/v1" : "/v1"); // prod uses same-origin over HTTPS
+console.log("API_URL: ",API_URL)
+
 function authHeader() {
   const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -74,7 +82,7 @@ export async function checkEmail(email) {
 }
 
 export async function checkUsername(username) {
-  console.log("Backend URL:", import.meta.env.VITE_BACKEND_URL);
+  console.log("Backend URL:", import.meta.env.VITE_API_BASE_URL);
   const res = await fetch(
     `${API_URL}/auth/check/username?username=${encodeURIComponent(username)}`
   );

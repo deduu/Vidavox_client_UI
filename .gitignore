@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 extract/
 test_page/
+
+.env
+requirements.txt

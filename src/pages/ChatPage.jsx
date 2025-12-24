@@ -11,6 +11,7 @@ import { useChatActions } from "../hooks/useChatActions";
 import { useScrollBehavior } from "../hooks/useScrollBehavior";
 
 const DEFAULT_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct";
+// const DEFAULT_MODEL = "Auto"
 
 export default function ChatPage() {
   const inputRef = useRef(null);
