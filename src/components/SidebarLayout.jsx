@@ -155,7 +155,7 @@ export default function SidebarLayout({ children, bottomSlot, fit = false }) {
         {/* Navigation */}
         <div className="px-4 py-4 flex-shrink-0">
           <nav className="space-y-1">
-            <NavButton
+            {/* <NavButton
               icon={<LayoutDashboard size={18} />}
               label="Dashboard"
               active={isActive("/dashboard")}
@@ -163,9 +163,9 @@ export default function SidebarLayout({ children, bottomSlot, fit = false }) {
                 navigate("/dashboard");
                 setOpen(false);
               }}
-            />
+            /> */}
             {/* Universal Document Parser tab */}
-            <NavButton
+            {/* <NavButton
               icon={<FilePlus size={18} />}
               label="UniDocParser"
               active={isActive("/unidocparser")}
@@ -176,9 +176,9 @@ export default function SidebarLayout({ children, bottomSlot, fit = false }) {
                 navigate("/unidocparser");
                 setOpen(false);
               }}
-            />
+            /> */}
 
-            <NavButton
+            {/* <NavButton
               icon={<Database size={18} />}
               label="Knowledge Bases"
               active={isActive("/knowledge-bases")}
@@ -186,7 +186,7 @@ export default function SidebarLayout({ children, bottomSlot, fit = false }) {
                 navigate("/knowledge-bases");
                 setOpen(false);
               }}
-            />
+            /> */}
           </nav>
         </div>
 
