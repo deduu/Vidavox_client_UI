@@ -28,3 +28,5 @@ test_page/
 .env
 requirements.txt
 .env.production
+/dist/
+/node_modules/
