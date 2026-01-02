@@ -10,7 +10,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/v1": {
-        target: "http://127.0.0.1:8005",
+        target: "http://localhost:8008",
         changeOrigin: true,
         secure: false,
       },

@@ -3,11 +3,14 @@
 const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 import { API_BASE_URL } from "../config";
 export const API_URL =
-  // allow override via env (e.g., staging)
-  (import.meta?.env?.VITE_API_BASE_URL &&
-    import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")) ||
-  // dev fallback
-  (isLocal ? "http://100.122.103.94:8008/v1" : "/v1"); // prod uses same-origin over HTTPS
+  import.meta.env.VITE_API_BASE_URL ?? "/v1";
+
+// export const API_URL =
+//   // allow override via env (e.g., staging)
+//   (import.meta?.env?.VITE_API_BASE_URL &&
+//     import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")) ||
+//   // dev fallback
+//   (isLocal ? "http://100.122.103.94:8008/v1" : "/v1"); // prod uses same-origin over HTTPS
 
 // export const API_URL ="http://localhost:8008/v1"
   // // allow override via env (e.g., staging)
