@@ -38,6 +38,23 @@ function fixBrokenLinks(md) {
     .replace(/\)\(page\s+(\d+)/gi, ") (page $1)");
 }
 
+const extractThinkingBlocks = (text) => {
+  const blocks = [];
+  const regex = /<(think|thinking)>([\s\S]*?)<\/\1>/gi;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    blocks.push((match[2] ?? "").trim());
+  }
+
+  const withoutBlocks = text.replace(
+    /<(think|thinking)>([\s\S]*?)<\/\1>/gi,
+    ""
+  );
+  const visible = withoutBlocks.replace(/<\/?think(?:ing)?>/gi, "").trim();
+  return { blocks, visible };
+};
+
 const MarkdownRenderer = ({ content }) => (
   <div className="prose max-w-none">
     <ReactMarkdown
@@ -280,25 +297,22 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
     if (!content) return <TextRenderer content="" />;
 
     // 🧠 Detect reasoning tags first (<thinking> or <think>)
-    const thinkingMatch = content.match(
-      /<(think|thinking)>([\s\S]*?)<\/(think|thinking)>/i
-    );
+    const { blocks: thinkingBlocks, visible: visiblePart } =
+      extractThinkingBlocks(content);
 
-    // Extract reasoning and visible part
-    const reasoning = thinkingMatch ? thinkingMatch[2].trim() : null;
-    const visiblePart = thinkingMatch
-      ? content.replace(thinkingMatch[0], "").trim()
-      : content;
-
-    // 🪄 Render collapsible reasoning if exists
-    const reasoningBlock = reasoning ? (
-      <ThinkingBlock
-        reasoning={reasoning}
-        autoExpanded={autoExpanded}
-        onToggle={setAutoExpanded}
-        isStreaming={msg.streaming}
-      />
-    ) : null;
+    const reasoningBlocks =
+      thinkingBlocks.length > 0 ? (
+        <div className="space-y-3">
+          {thinkingBlocks.map((reasoning, index) => (
+            <ThinkingBlock
+              key={`thinking-${index}`}
+              reasoning={reasoning}
+              autoExpanded={autoExpanded}
+              isStreaming={msg.streaming}
+            />
+          ))}
+        </div>
+      ) : null;
 
     // 🧩 Format detection (but only render visible part in bubble)
     try {
@@ -309,7 +323,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
       ) {
         return (
           <div className="space-y-3">
-            {reasoningBlock}
+            {reasoningBlocks}
             <JsonRenderer content={visiblePart} />
           </div>
         );
@@ -329,7 +343,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
               : `bg-gray-50 border ${ASSIST_BUBBLE_MAX}`
           }`}
         >
-          {reasoningBlock}
+          {reasoningBlocks}
           <HtmlRenderer content={visiblePart} />
         </div>
       );
@@ -338,7 +352,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
     if (msg.format === "code" || msg.language) {
       return (
         <div className="space-y-3">
-          {reasoningBlock}
+          {reasoningBlocks}
           <CodeRenderer content={visiblePart} language={msg.language} />
         </div>
       );
@@ -355,7 +369,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
     if (msg.format === "markdown" || isProbablyMarkdown(visiblePart)) {
       return (
         <div className="space-y-3">
-          {reasoningBlock}
+          {reasoningBlocks}
           <MarkdownRenderer content={visiblePart} />
         </div>
       );
@@ -364,7 +378,7 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
     // Default plain text
     return (
       <div className="space-y-3">
-        {reasoningBlock}
+        {reasoningBlocks}
         <TextRenderer content={visiblePart} />
       </div>
     );
@@ -594,3 +608,4 @@ export default function ChatMessage({ msg, onCopy, onEdit, onDownload }) {
     </div>
   );
 }
+
