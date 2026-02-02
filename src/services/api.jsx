@@ -903,6 +903,7 @@ export const chatCompletions = async (payload) => {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeader(),
     },
     body: JSON.stringify({ ...body, stream: false }),
     signal: signal,
@@ -930,6 +931,7 @@ export async function* chatCompletionsStream(payload) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeader(),
     },
     body: JSON.stringify({ ...body, stream: true }),
     signal: signal,
